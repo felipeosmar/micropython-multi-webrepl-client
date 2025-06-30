@@ -1,0 +1,98 @@
+import React, { useState } from 'react';
+import { ReplConnection, ReplStatus } from '../types';
+import { useWebRepl } from '../hooks/useWebRepl';
+import Terminal from './Terminal';
+import { TrashIcon } from './icons/TrashIcon';
+import { WifiIcon } from './icons/WifiIcon';
+import { WifiOffIcon } from './icons/WifiOffIcon';
+import { RefreshIcon } from './icons/RefreshIcon';
+import { PencilIcon } from './icons/PencilIcon';
+
+interface ReplConnectionCardProps {
+  connection: ReplConnection;
+  onRemove: (id: string) => void;
+  onEdit: (id: string) => void;
+}
+
+const StatusIndicator: React.FC<{ status: ReplStatus; onReconnect?: () => void; }> = ({ status, onReconnect }) => {
+  const statusConfig = {
+    [ReplStatus.CONNECTED]: { text: 'Connected', color: 'text-green-400', icon: <WifiIcon className="w-5 h-5" /> },
+    [ReplStatus.CONNECTING]: { text: 'Connecting...', color: 'text-yellow-400', icon: <WifiIcon className="w-5 h-5 animate-pulse" /> },
+    [ReplStatus.PASSWORD]: { text: 'Password Required', color: 'text-orange-400', icon: <WifiIcon className="w-5 h-5" /> },
+    [ReplStatus.DISCONNECTED]: { text: 'Disconnected', color: 'text-gray-500', icon: <WifiOffIcon className="w-5 h-5" /> },
+    [ReplStatus.ERROR]: { text: 'Error', color: 'text-red-500', icon: <WifiOffIcon className="w-5 h-5" /> },
+  };
+  const config = statusConfig[status];
+
+  return (
+    <div className={`flex items-center space-x-2 text-sm font-semibold ${config.color}`}>
+      {config.icon}
+      <span>{config.text}</span>
+       {(status === ReplStatus.DISCONNECTED || status === ReplStatus.ERROR) && onReconnect && (
+        <button onClick={onReconnect} className="text-gray-500 hover:text-cyan-400 transition-colors" aria-label="Reconnect">
+          <RefreshIcon className="w-5 h-5" />
+        </button>
+      )}
+    </div>
+  );
+};
+
+const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
+  const { status, lines, sendData, sendCommand, reconnect } = useWebRepl(connection.url, connection.password);
+  const [password, setPassword] = useState('');
+
+  const handleCommand = (cmd: string) => {
+    sendCommand(cmd);
+  };
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendData(password + '\r');
+    setPassword('');
+  };
+  
+  return (
+    <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
+      <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
+        <div className="flex flex-col">
+           <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
+           <p className="text-xs text-gray-400 font-mono">{connection.url}</p>
+        </div>
+        <div className="flex items-center space-x-4">
+            <StatusIndicator status={status} onReconnect={reconnect} />
+            <button
+                onClick={() => onEdit(connection.id)}
+                className="text-gray-500 hover:text-yellow-400 transition-colors"
+                aria-label="Edit Connection"
+            >
+                <PencilIcon className="w-5 h-5" />
+            </button>
+            <button
+                onClick={() => onRemove(connection.id)}
+                className="text-gray-500 hover:text-red-500 transition-colors"
+                aria-label="Remove Connection"
+            >
+                <TrashIcon className="w-5 h-5" />
+            </button>
+        </div>
+      </header>
+      <div className="flex-grow p-1 overflow-y-auto">
+        <Terminal lines={lines} onCommand={handleCommand} />
+      </div>
+       {status === ReplStatus.PASSWORD && (
+        <form onSubmit={handlePasswordSubmit} className="p-2 border-t border-gray-700 bg-gray-900/50">
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter Password..."
+            autoFocus
+            className="w-full bg-gray-700 text-gray-100 placeholder-gray-400 px-3 py-2 rounded-md border border-gray-600 focus:ring-2 focus:ring-cyan-500 focus:outline-none font-mono text-sm"
+          />
+        </form>
+      )}
+    </div>
+  );
+};
+
+export default ReplConnectionCard;

@@ -1,0 +1,5 @@
+{
+  "name": "MicroPython Multi-WebREPL Client",
+  "description": "A web-based client to connect to multiple MicroPython WebREPL instances simultaneously. Manage and interact with several microcontroller boards from a single interface.",
+  "requestFramePermissions": []
+}

@@ -48,6 +48,9 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand }) => {
         setHistoryIndex(-1);
         setCommand('');
       }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setCommand('');
     }
   };
 

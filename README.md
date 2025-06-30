@@ -39,3 +39,11 @@ Este é um cliente WebREPL baseado na web, construído com React e Vite, que per
 3.  Clique em "Save".
 4.  Um novo card de conexão aparecerá no painel, e o cliente tentará se conectar automaticamente.
 5.  Use o terminal dentro do card para interagir com seu dispositivo MicroPython.
+
+
+## TODO
+- Melhorar a robustez da conexão serial, criar campo de boundrate
+- Implementar banco de dados para persistência de configurações de conexão (atualmente usa localStorage).
+- Implementar suporte a múltiplos protocolos de conexão (WebREPL, SSH, etc.).
+- Adicionar suporte a comandos personalizados e scripts.
+- Adicionar suporte a temas escuro e claro.

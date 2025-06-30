@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ReplConnection, ReplStatus } from '../types';
+import { ReplConnection, ReplStatus } from '@/types';
 import { useWebRepl } from '../hooks/useWebRepl';
 import { useSerial } from '../hooks/useSerial';
 import Terminal from './Terminal';
@@ -109,8 +109,19 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
   );
 };
 
+interface CardLayoutProps {
+  connection: ReplConnection;
+  status: ReplStatus;
+  lines: string[];
+  onCommand: (cmd: string) => void;
+  onReconnect: () => void;
+  onEdit: (id: string) => void;
+  onRemove: (id: string) => void;
+  children?: React.ReactNode;
+}
+
 // Layout reutilizável do cartão
-const CardLayout: React.FC<any> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children }) => (
+const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children }) => (
   <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
     <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
       <div className="flex flex-col">

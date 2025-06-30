@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ReplConnection } from '../types';
+import { ReplConnection } from '@/types';
 import ReplConnectionCard from './ReplConnectionCard';
 import AddConnectionForm from './AddConnectionForm';
 import { PlusIcon } from './icons/PlusIcon';
@@ -23,7 +23,12 @@ const ReplManager: React.FC = () => {
 
   useEffect(() => {
     try {
-      localStorage.setItem('webrepl-connections', JSON.stringify(connections));
+      // Remove o objeto 'port' antes de salvar, pois ele não é serializável
+      const connectionsToSave = connections.map(({ port, ...rest }) => rest);
+      localStorage.setItem(
+        'webrepl-connections',
+        JSON.stringify(connectionsToSave)
+      );
     } catch (error) {
        console.error("Failed to save connections to localStorage", error);
     }

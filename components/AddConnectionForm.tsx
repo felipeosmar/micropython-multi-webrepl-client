@@ -12,6 +12,28 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
   const [connectionType, setConnectionType] = useState<'webrepl' | 'serial'>('webrepl');
   const [ip, setIp] = useState('192.168.4.1');
   const [password, setPassword] = useState('');
+  const [port, setPort] = useState<SerialPort | null>(null);
+
+  const handleRequestPort = async () => {
+    if ('serial' in navigator) {
+      try {
+        const serial = navigator.serial as any;
+        const selectedPort = await serial.requestPort();
+        setPort(selectedPort);
+      } catch (error: any) {
+        console.error("Error selecting serial port:", error);
+        alert(`Error selecting serial port: ${error.message}`);
+      }
+    } else {
+      alert('Web Serial API not supported in this browser.');
+    }
+  };
+
+  useEffect(() => {
+    if (connectionType === 'serial' && !port) {
+      handleRequestPort();
+    }
+  }, [connectionType]);
 
   useEffect(() => {
     if (existingConnection) {
@@ -20,6 +42,8 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
       if (existingConnection.connectionType === 'webrepl') {
         setIp(existingConnection.ip || '192.168.4.1');
         setPassword(existingConnection.password || '');
+      } else if (existingConnection.connectionType === 'serial') {
+        setPort(existingConnection.port || null);
       }
     }
   }, [existingConnection]);
@@ -29,8 +53,10 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
     if (name.trim()) {
       if (connectionType === 'webrepl' && ip.trim()) {
         onSave({ name, connectionType, ip, password });
-      } else if (connectionType === 'serial') {
-        onSave({ name, connectionType, ip: '' }); // IP fica vazio para serial
+      } else if (connectionType === 'serial' && port) {
+        onSave({ name, connectionType, ip: '', port });
+      } else if (connectionType === 'serial' && !port) {
+        alert('Please select a serial port.');
       }
     }
   };
@@ -114,10 +140,21 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
 
           {connectionType === 'serial' && (
              <div className="mb-4 p-3 bg-gray-700/50 rounded-md border border-gray-600">
-                <p className="text-gray-300 text-sm">
-                    Serial connection must be initiated from the connection card after saving.
-                    You will be prompted to select a serial port by the browser.
+                <p className="text-gray-300 text-sm mb-3">
+                    {port ? 'Porta serial selecionada. Você pode alterar a porta abaixo.' : 'Selecione a porta serial para o seu dispositivo.'}
                 </p>
+                <button
+                  type="button"
+                  onClick={handleRequestPort}
+                  className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-indigo-500"
+                >
+                  {port ? 'Change Serial Port' : 'Select Serial Port'}
+                </button>
+                {port && (
+                    <div className="mt-3 text-sm text-gray-300">
+                        <p>Port Selected: <span className="font-mono bg-gray-900 px-2 py-1 rounded">{port.getInfo().usbVendorId?.toString(16)}:{port.getInfo().usbProductId?.toString(16)}</span></p>
+                    </div>
+                )}
              </div>
           )}
 

@@ -1,18 +1,13 @@
 import React, { useState } from 'react';
 import { ReplConnection, ReplStatus } from '../types';
 import { useWebRepl } from '../hooks/useWebRepl';
+import { useSerial } from '../hooks/useSerial';
 import Terminal from './Terminal';
+import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { WifiIcon } from './icons/WifiIcon';
 import { WifiOffIcon } from './icons/WifiOffIcon';
 import { RefreshIcon } from './icons/RefreshIcon';
-import { PencilIcon } from './icons/PencilIcon';
-
-interface ReplConnectionCardProps {
-  connection: ReplConnection;
-  onRemove: (id: string) => void;
-  onEdit: (id: string) => void;
-}
 
 const StatusIndicator: React.FC<{ status: ReplStatus; onReconnect?: () => void; }> = ({ status, onReconnect }) => {
   const statusConfig = {
@@ -37,49 +32,47 @@ const StatusIndicator: React.FC<{ status: ReplStatus; onReconnect?: () => void; 
   );
 };
 
+interface ReplConnectionCardProps {
+  connection: ReplConnection;
+  onRemove: (id: string) => void;
+  onEdit: (id: string) => void;
+}
+
 const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendData, sendCommand, reconnect } = useWebRepl(connection.url, connection.password);
+  const isSerial = connection.connectionType === 'serial';
+  
+  // Hooks condicionais não são permitidos, então criamos um componente wrapper
+  return isSerial ? (
+    <SerialCardContent connection={connection} onRemove={onRemove} onEdit={onEdit} />
+  ) : (
+    <WebReplCardContent connection={connection} onRemove={onRemove} onEdit={onEdit} />
+  );
+};
+
+// Componente para a lógica do WebREPL
+const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
+  const { status, lines, sendData, sendCommand, reconnect } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
   const [password, setPassword] = useState('');
 
-  const handleCommand = (cmd: string) => {
-    sendCommand(cmd);
-  };
+  const handleCommand = (cmd: string) => sendCommand(cmd);
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     sendData(password + '\r');
     setPassword('');
   };
-  
+
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
-      <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
-        <div className="flex flex-col">
-           <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
-           <p className="text-xs text-gray-400 font-mono">{connection.url}</p>
-        </div>
-        <div className="flex items-center space-x-4">
-            <StatusIndicator status={status} onReconnect={reconnect} />
-            <button
-                onClick={() => onEdit(connection.id)}
-                className="text-gray-500 hover:text-yellow-400 transition-colors"
-                aria-label="Edit Connection"
-            >
-                <PencilIcon className="w-5 h-5" />
-            </button>
-            <button
-                onClick={() => onRemove(connection.id)}
-                className="text-gray-500 hover:text-red-500 transition-colors"
-                aria-label="Remove Connection"
-            >
-                <TrashIcon className="w-5 h-5" />
-            </button>
-        </div>
-      </header>
-      <div className="flex-grow p-1 overflow-y-auto">
-        <Terminal lines={lines} onCommand={handleCommand} />
-      </div>
-       {status === ReplStatus.PASSWORD && (
+    <CardLayout
+      connection={connection}
+      status={status}
+      lines={lines}
+      onCommand={handleCommand}
+      onReconnect={reconnect}
+      onEdit={onEdit}
+      onRemove={onRemove}
+    >
+      {status === ReplStatus.PASSWORD && (
         <form onSubmit={handlePasswordSubmit} className="p-2 border-t border-gray-700 bg-gray-900/50">
           <input
             type="password"
@@ -91,8 +84,64 @@ const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onR
           />
         </form>
       )}
-    </div>
+    </CardLayout>
   );
 };
+
+// Componente para a lógica Serial
+const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
+  const { status, lines, sendCommand, connect, disconnect } = useSerial(connection.port);
+
+  const handleCommand = (cmd: string) => sendCommand(cmd);
+
+  return (
+    <CardLayout
+      connection={connection}
+      status={status}
+      lines={lines}
+      onCommand={handleCommand}
+      onReconnect={connect}
+      onEdit={onEdit}
+      onRemove={onRemove}
+    >
+      {/* O botão de conexão foi removido, a conexão agora é automática */}
+    </CardLayout>
+  );
+};
+
+// Layout reutilizável do cartão
+const CardLayout: React.FC<any> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children }) => (
+  <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
+    <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
+      <div className="flex flex-col">
+        <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
+        <p className="text-xs text-gray-400 font-mono">
+          {connection.connectionType === 'serial' ? 'Serial Connection' : connection.ip}
+        </p>
+      </div>
+      <div className="flex items-center space-x-4">
+        <StatusIndicator status={status} onReconnect={onReconnect} />
+        <button
+          onClick={() => onEdit(connection.id)}
+          className="text-gray-500 hover:text-yellow-400 transition-colors"
+          aria-label="Edit Connection"
+        >
+          <PencilIcon className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => onRemove(connection.id)}
+          className="text-gray-500 hover:text-red-500 transition-colors"
+          aria-label="Remove Connection"
+        >
+          <TrashIcon className="w-5 h-5" />
+        </button>
+      </div>
+    </header>
+    <div className="flex-grow p-1 overflow-y-auto">
+      <Terminal lines={lines} onCommand={onCommand} />
+    </div>
+    {children}
+  </div>
+);
 
 export default ReplConnectionCard;

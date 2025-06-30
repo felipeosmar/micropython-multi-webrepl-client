@@ -1,9 +1,10 @@
 export type ReplConnection = {
   id: string;
   name: string;
-  ip: string;
   connectionType: 'webrepl' | 'serial';
+  ip: string;
   password?: string;
+  port?: any; // O objeto da porta serial não é serializável
 };
 
 export type TerminalData = {

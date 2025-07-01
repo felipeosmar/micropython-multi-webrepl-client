@@ -132,12 +132,15 @@ export const useSerial = (
   }, [appendLine]);
 
   const connect = useCallback(async () => {
+    console.log('Connect called - Port:', !!portRef.current, 'Status:', status, 'Connecting:', connecting.current);
+    
     if (!portRef.current) {
       appendLine('[SYSTEM] Error: No serial port provided.');
       setStatus(ReplStatus.ERROR);
       return;
     }
     if (status === ReplStatus.CONNECTED || status === ReplStatus.CONNECTING || connecting.current) {
+      console.log('Connect blocked - already connected or connecting');
       return;
     }
 
@@ -241,24 +244,48 @@ export const useSerial = (
     const prevPort = portRef.current;
     portRef.current = port;
     
-    // Auto-connect when a new port is provided (check by port info instead of reference)
-    if (port && status === ReplStatus.DISCONNECTED) {
-      const prevInfo = prevPort?.getInfo();
-      const currentInfo = port.getInfo();
+    // Auto-connect when a new port is provided
+    if (port && (status === ReplStatus.DISCONNECTED || status === ReplStatus.ERROR)) {
+      // Check if this is a new port by comparing info
+      const shouldConnect = !prevPort || (
+        prevPort.getInfo().usbVendorId !== port.getInfo().usbVendorId ||
+        prevPort.getInfo().usbProductId !== port.getInfo().usbProductId
+      );
       
-      // Connect if it's a new port or if there was no previous port
-      if (!prevPort || 
-          prevInfo?.usbVendorId !== currentInfo?.usbVendorId ||
-          prevInfo?.usbProductId !== currentInfo?.usbProductId) {
-        // Small delay to ensure component is fully mounted
-        setTimeout(() => {
-          if (portRef.current === port && status === ReplStatus.DISCONNECTED) {
+      if (shouldConnect) {
+        // Immediate connection attempt for new ports
+        const attemptConnection = async () => {
+          // Wait a bit to ensure component is ready
+          await new Promise(resolve => setTimeout(resolve, 50));
+          
+          // Double-check the port is still the same and status allows connection
+          if (portRef.current === port && 
+              (status === ReplStatus.DISCONNECTED || status === ReplStatus.ERROR) &&
+              !connecting.current) {
+            console.log('Auto-connecting to new serial port...');
             connect();
           }
-        }, 100);
+        };
+        
+        attemptConnection();
       }
     }
-  }, [port, connect, status]);
+  }, [port, status, connect]);
+
+  // Separate effect for initial port setup to ensure auto-connection
+  useEffect(() => {
+    if (port && status === ReplStatus.DISCONNECTED && !connecting.current) {
+      console.log('Initial port detected, attempting auto-connection...');
+      // Very short delay to ensure everything is initialized
+      const timer = setTimeout(() => {
+        if (port && portRef.current === port && status === ReplStatus.DISCONNECTED && !connecting.current) {
+          connect();
+        }
+      }, 10);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [port]); // Only depend on port to trigger on initial setup
 
   useEffect(() => {
     return () => {

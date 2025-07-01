@@ -1,12 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 
+/**
+ * Props do componente Terminal
+ */
 interface TerminalProps {
+  /** Linhas de texto a serem exibidas no terminal */
   lines: string[];
+  /** Função chamada quando um comando é enviado */
   onCommand: (command: string) => void;
+  /** Se deve rolar automaticamente para baixo */
   autoScroll?: boolean;
+  /** Função para limpar o terminal */
   onClear?: () => void;
 }
 
+/**
+ * Componente Terminal interativo para comunicação REPL
+ * 
+ * Funcionalidades:
+ * - Exibição de linhas com sintaxe colorida
+ * - Campo de entrada de comandos
+ * - Histórico de comandos (setas para cima/baixo)
+ * - Autoscroll opcional
+ * - Botão de limpeza
+ * - Foco automático no campo de entrada
+ */
 const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true, onClear }) => {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
@@ -24,6 +42,10 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
     setCommand(e.target.value);
   };
 
+  /**
+   * Processa o envio de comando via formulário
+   * Adiciona ao histórico e limpa o campo
+   */
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onCommand(command);
@@ -34,6 +56,12 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
     setCommand('');
   };
 
+  /**
+   * Gerencia navegação no histórico de comandos
+   * - Seta para cima: comando anterior
+   * - Seta para baixo: próximo comando
+   * - Escape: limpa campo atual
+   */
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault();

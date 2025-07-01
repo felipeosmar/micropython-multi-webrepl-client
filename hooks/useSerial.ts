@@ -1,7 +1,10 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ReplStatus } from '../types';
 
-// Adicionando a definição da interface SerialPort para clareza
+/**
+ * Interface extendida do SerialPort para garantir compatibilidade com TypeScript
+ * Define todos os métodos e propriedades necessários para Web Serial API
+ */
 interface SerialPort extends EventTarget {
   open(options: any): Promise<void>;
   close(): Promise<void>;
@@ -15,7 +18,22 @@ interface SerialPort extends EventTarget {
   getInfo(): any;
 }
 
-
+/**
+ * Hook customizado para gerenciar conexões seriais com MicroPython
+ * 
+ * Funcionalidades principais:
+ * - Conexão automática ao receber nova porta
+ * - Gerenciamento do ciclo de vida da conexão
+ * - Stream de dados bidirecional
+ * - Suporte a diferentes terminadores de linha
+ * - Opções de display (timestamp, autoscroll)
+ * 
+ * @param port - Porta serial do dispositivo
+ * @param baudRate - Taxa de transmissão (padrão: 115200)
+ * @param lineEnding - Tipo de terminador para comandos (padrão: carriage return)
+ * @param autoScroll - Se deve rolar terminal automaticamente
+ * @param showTimestamp - Se deve mostrar timestamp nas mensagens
+ */
 export const useSerial = (
   port: SerialPort | null | undefined, 
   baudRate: number = 115200,
@@ -32,8 +50,14 @@ export const useSerial = (
   const connecting = useRef(false);
   const readingLoop = useRef<Promise<void> | null>(null);
 
+  /**
+   * Adiciona uma nova linha ao terminal com sanitição e processamento
+   * - Remove caracteres de controle desnecessários
+   * - Adiciona timestamp se habilitado
+   * - Gerencia quebras de linha adequadamente
+   */
   const appendLine = useCallback((data: string) => {
-    // Improved sanitization for MicroPython REPL
+    // Sanitização para MicroPython REPL: remove caracteres de controle e sequências ANSI
     const sanitizedData = data.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').replace(/\x1B\[[0-9;]*m/g, '');
     
     let processedData = sanitizedData;
@@ -61,6 +85,13 @@ export const useSerial = (
     });
   }, [showTimestamp]);
 
+  /**
+   * Desconecta da porta serial e limpa todos os recursos
+   * - Para o loop de leitura
+   * - Fecha streams de leitura e escrita
+   * - Fecha a porta serial
+   * - Atualiza o status da conexão
+   */
   const disconnect = useCallback(async () => {
     keepReading.current = false;
     connecting.current = false;
@@ -105,6 +136,10 @@ export const useSerial = (
     }
   }, [appendLine, status]);
 
+  /**
+   * Inicia o loop de leitura contínua da porta serial
+   * Executa de forma assíncrona e processa dados recebidos
+   */
   const startReadingLoop = useCallback(async () => {
     if (!reader.current || !keepReading.current) return;
     
@@ -131,6 +166,13 @@ export const useSerial = (
     }
   }, [appendLine]);
 
+  /**
+   * Estabelece conexão com a porta serial
+   * - Valida disponibilidade da porta
+   * - Configura parâmetros de comunicação
+   * - Inicializa streams de leitura e escrita
+   * - Inicia loop de leitura
+   */
   const connect = useCallback(async () => {
     if (!portRef.current) {
       appendLine('[SYSTEM] Error: No serial port provided.');
@@ -295,6 +337,10 @@ export const useSerial = (
   }, []);
 
 
+  /**
+   * Envia dados brutos para a porta serial
+   * @param data - String a ser enviada
+   */
   const sendData = useCallback(async (data: string) => {
     if (writer.current) {
         const encoder = new TextEncoder();
@@ -304,20 +350,26 @@ export const useSerial = (
     }
   }, [appendLine]);
 
+  /**
+   * Envia um comando para o MicroPython REPL
+   * Adiciona o terminador de linha apropriado conforme configuração
+   * @param command - Comando a ser executado
+   */
   const sendCommand = useCallback((command: string) => {
     if (command.trim() === '') {
-      // Send carriage return for new prompt
+      // Envia carriage return para obter novo prompt
       sendData('\r');
       return;
     }
     
+    // Seleciona o terminador de linha baseado na configuração
     let ending = '';
     switch (lineEnding) {
       case 'newline':
         ending = '\n';
         break;
       case 'carriageReturn':
-        ending = '\r';
+        ending = '\r';  // Padrão para MicroPython
         break;
       case 'both':
         ending = '\r\n';
@@ -331,6 +383,9 @@ export const useSerial = (
     sendData(command + ending);
   }, [sendData, lineEnding]);
 
+  /**
+   * Limpa todo o conteúdo do terminal
+   */
   const clearOutput = useCallback(() => {
     setLines([]);
   }, []);

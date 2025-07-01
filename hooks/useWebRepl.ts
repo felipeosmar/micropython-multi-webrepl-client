@@ -1,6 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
 
+/**
+ * Hook customizado para gerenciar conexões WebREPL com MicroPython
+ * 
+ * Funcionalidades principais:
+ * - Conexão WebSocket com dispositivos MicroPython
+ * - Autenticação automática com senha salva
+ * - Reconexão manual
+ * - Sanitização de dados recebidos
+ * - Gerenciamento de estado da conexão
+ * 
+ * @param url - URL WebSocket do dispositivo (ex: "ws://192.168.4.1:8266")
+ * @param password - Senha para autenticação automática
+ */
 export const useWebRepl = (url: string | null, password?: string) => {
   const [status, setStatus] = useState<ReplStatus>(ReplStatus.DISCONNECTED);
   const [lines, setLines] = useState<string[]>([]);
@@ -9,8 +22,12 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const passwordSent = useRef(false);
   const effectId = useRef(0); // Add a ref to track effect instances
 
+  /**
+   * Adiciona uma nova linha ao terminal com sanitição
+   * Remove caracteres de controle mas preserva espaços em branco básicos
+   */
   const appendLine = useCallback((data: string) => {
-    // Sanitize control characters for clean display, but allow basic whitespace
+    // Sanitiza caracteres de controle para exibição limpa
     const sanitizedData = data.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
     setLines(prev => {
       if (prev.length === 0) {
@@ -31,6 +48,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
     });
   }, []);
 
+  /**
+   * Envia dados brutos através do WebSocket
+   * @param data - String a ser enviada
+   */
   const sendData = useCallback((data: string) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(data);
@@ -39,16 +60,25 @@ export const useWebRepl = (url: string | null, password?: string) => {
     }
   }, [appendLine]);
 
+  /**
+   * Envia um comando para o WebREPL
+   * WebREPL espera \r como terminador de linha
+   * @param command - Comando a ser executado
+   */
   const sendCommand = useCallback((command: string) => {
     if (command.trim() === '') {
-      // If user just hits enter, send a carriage return to get a new prompt
+      // Se usuário apenas pressiona enter, envia carriage return para novo prompt
       sendData('\r');
       return;
     }
-    // Send command with \r, which is what webrepl expects.
+    // Envia comando com \r, que é o que o WebREPL espera
     sendData(command + '\r');
   }, [sendData]);
 
+  /**
+   * Força uma tentativa de reconexão
+   * Incrementa o contador de tentativas para triggerar o useEffect
+   */
   const reconnect = useCallback(() => {
     setReconnectAttempt(c => c + 1);
   }, []);

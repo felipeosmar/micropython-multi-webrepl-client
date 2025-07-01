@@ -3,11 +3,13 @@ import { ReplConnection, ReplStatus } from '@/types';
 import { useWebRepl } from '../hooks/useWebRepl';
 import { useSerial } from '../hooks/useSerial';
 import Terminal from './Terminal';
+import FileManagerPanel from './FileManagerPanel';
 import { PencilIcon } from './icons/PencilIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { WifiIcon } from './icons/WifiIcon';
 import { WifiOffIcon } from './icons/WifiOffIcon';
 import { RefreshIcon } from './icons/RefreshIcon';
+import { FolderIcon } from './icons/FolderIcon';
 
 const getSerialPortName = (port: SerialPort): string => {
   const info = port.getInfo();
@@ -97,6 +99,8 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
       onReconnect={reconnect}
       onEdit={onEdit}
       onRemove={onRemove}
+      sendData={sendData}
+      sendCommand={sendCommand}
     >
       {status === ReplStatus.PASSWORD && (
         <form onSubmit={handlePasswordSubmit} className="p-2 border-t border-gray-700 bg-gray-900/50">
@@ -154,43 +158,106 @@ interface CardLayoutProps {
   children?: React.ReactNode;
   autoScroll?: boolean;
   onClear?: () => void;
+  sendData?: (data: string) => Promise<void> | void;
+  sendCommand?: (command: string) => void;
 }
 
 // Layout reutilizável do cartão
-const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children, autoScroll, onClear }) => (
-  <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
-    <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
-      <div className="flex flex-col">
-        <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
-        <p className="text-xs text-gray-400 font-mono">
-          {connection.connectionType === 'serial' 
-            ? `Serial Connection - ${connection.baudRate || 115200} baud${connection.port ? ` - ${getSerialPortName(connection.port)}` : ''}`
-            : connection.ip}
-        </p>
+const CardLayout: React.FC<CardLayoutProps> = ({ 
+  connection, 
+  status, 
+  lines, 
+  onCommand, 
+  onReconnect, 
+  onEdit, 
+  onRemove, 
+  children, 
+  autoScroll, 
+  onClear,
+  sendData,
+  sendCommand
+}) => {
+  const [activeTab, setActiveTab] = useState<'terminal' | 'files'>('terminal');
+  const isConnected = status === ReplStatus.CONNECTED;
+  const isWebRepl = connection.connectionType === 'webrepl';
+
+  return (
+    <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
+      <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
+        <div className="flex flex-col">
+          <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
+          <p className="text-xs text-gray-400 font-mono">
+            {connection.connectionType === 'serial' 
+              ? `Serial Connection - ${connection.baudRate || 115200} baud${connection.port ? ` - ${getSerialPortName(connection.port)}` : ''}`
+              : connection.ip}
+          </p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <StatusIndicator status={status} onReconnect={onReconnect} />
+          <button
+            onClick={() => onEdit(connection.id)}
+            className="text-gray-500 hover:text-yellow-400 transition-colors"
+            aria-label="Edit Connection"
+          >
+            <PencilIcon className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => onRemove(connection.id)}
+            className="text-gray-500 hover:text-red-500 transition-colors"
+            aria-label="Remove Connection"
+          >
+            <TrashIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      {/* Abas - apenas para conexões WebREPL */}
+      {isWebRepl && (
+        <div className="flex border-b border-gray-700">
+          <button
+            onClick={() => setActiveTab('terminal')}
+            className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'terminal'
+                ? 'bg-gray-700 text-cyan-400 border-b-2 border-cyan-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+          >
+            <span>💻</span>
+            <span>Terminal</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'files'
+                ? 'bg-gray-700 text-cyan-400 border-b-2 border-cyan-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+            disabled={!isConnected}
+          >
+            <FolderIcon className="w-4 h-4" />
+            <span>Arquivos</span>
+          </button>
+        </div>
+      )}
+
+      {/* Conteúdo */}
+      <div className="flex-grow overflow-hidden">
+        {isWebRepl && activeTab === 'files' ? (
+          <FileManagerPanel
+            sendData={sendData!}
+            sendCommand={sendCommand!}
+            isConnected={isConnected}
+          />
+        ) : (
+          <div className="p-1 h-full">
+            <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
+          </div>
+        )}
       </div>
-      <div className="flex items-center space-x-4">
-        <StatusIndicator status={status} onReconnect={onReconnect} />
-        <button
-          onClick={() => onEdit(connection.id)}
-          className="text-gray-500 hover:text-yellow-400 transition-colors"
-          aria-label="Edit Connection"
-        >
-          <PencilIcon className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => onRemove(connection.id)}
-          className="text-gray-500 hover:text-red-500 transition-colors"
-          aria-label="Remove Connection"
-        >
-          <TrashIcon className="w-5 h-5" />
-        </button>
-      </div>
-    </header>
-    <div className="flex-grow p-1 overflow-y-auto">
-      <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
+      
+      {children}
     </div>
-    {children}
-  </div>
-);
+  );
+};
 
 export default ReplConnectionCard;

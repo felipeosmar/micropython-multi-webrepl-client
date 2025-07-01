@@ -6,7 +6,8 @@
       "Bash(npm run build:*)",
       "Bash(git reset:*)",
       "Bash(rm:*)",
-      "WebFetch(domain:developer.mozilla.org)"
+      "WebFetch(domain:developer.mozilla.org)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }

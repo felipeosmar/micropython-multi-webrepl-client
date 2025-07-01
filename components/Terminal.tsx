@@ -3,9 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 interface TerminalProps {
   lines: string[];
   onCommand: (command: string) => void;
+  autoScroll?: boolean;
+  onClear?: () => void;
 }
 
-const Terminal: React.FC<TerminalProps> = ({ lines, onCommand }) => {
+const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true, onClear }) => {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -13,8 +15,10 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    endOfLinesRef.current?.scrollIntoView();
-  }, [lines]);
+    if (autoScroll) {
+      endOfLinesRef.current?.scrollIntoView();
+    }
+  }, [lines, autoScroll]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCommand(e.target.value);
@@ -71,20 +75,33 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand }) => {
         })}
         <div ref={endOfLinesRef} />
       </div>
-      <form onSubmit={handleFormSubmit} className="flex items-center pt-1">
-        <span className="text-green-400 mr-2">&gt;&gt;&gt;</span>
-        <input
-          ref={inputRef}
-          type="text"
-          value={command}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          className="bg-transparent text-gray-100 flex-grow focus:outline-none"
-          autoComplete="off"
-          autoCapitalize="off"
-          autoCorrect="off"
-        />
-      </form>
+      <div className="flex flex-col pt-1">
+        {onClear && (
+          <div className="flex justify-end mb-1">
+            <button
+              type="button"
+              onClick={onClear}
+              className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
+            >
+              Limpar saída
+            </button>
+          </div>
+        )}
+        <form onSubmit={handleFormSubmit} className="flex items-center">
+          <span className="text-green-400 mr-2">&gt;&gt;&gt;</span>
+          <input
+            ref={inputRef}
+            type="text"
+            value={command}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            className="bg-transparent text-gray-100 flex-grow focus:outline-none"
+            autoComplete="off"
+            autoCapitalize="off"
+            autoCorrect="off"
+          />
+        </form>
+      </div>
     </div>
   );
 };

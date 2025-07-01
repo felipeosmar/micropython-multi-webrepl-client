@@ -19,6 +19,9 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
   const [password, setPassword] = useState('');
   const [port, setPort] = useState<SerialPort | null>(null);
   const [baudRate, setBaudRate] = useState(115200);
+  const [lineEnding, setLineEnding] = useState<'none' | 'newline' | 'carriageReturn' | 'both'>('none');
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showTimestamp, setShowTimestamp] = useState(false);
 
   const handleRequestPort = async () => {
     if ('serial' in navigator) {
@@ -51,6 +54,9 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
       } else if (existingConnection.connectionType === 'serial') {
         setBaudRate(existingConnection.baudRate || 115200);
         setPort(existingConnection.port || null);
+        setLineEnding(existingConnection.lineEnding || 'none');
+        setAutoScroll(existingConnection.autoScroll ?? true);
+        setShowTimestamp(existingConnection.showTimestamp || false);
       }
     }
   }, [existingConnection]);
@@ -65,7 +71,7 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
           vendorId: port.getInfo().usbVendorId,
           productId: port.getInfo().usbProductId
         };
-        onSave({ name, connectionType, ip: '', port, baudRate, portInfo });
+        onSave({ name, connectionType, ip: '', port, baudRate, portInfo, lineEnding, autoScroll, showTimestamp });
       } else if (connectionType === 'serial' && !port) {
         alert('Please select a serial port.');
       }
@@ -164,6 +170,40 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
                   <option key={rate} value={rate}>{rate}{rate === 115200 && ' (Default)'}</option>
                 ))}
               </select>
+            </div>
+            <div className="mb-4">
+              <label htmlFor="conn-line-ending" className="block text-gray-300 mb-2">Terminador de Linha</label>
+              <select
+                id="conn-line-ending"
+                value={lineEnding}
+                onChange={(e) => setLineEnding(e.target.value as 'none' | 'newline' | 'carriageReturn' | 'both')}
+                className="w-full bg-gray-700 text-gray-100 placeholder-gray-400 px-3 py-2 rounded-md border border-gray-600 focus:ring-2 focus:ring-cyan-500 focus:outline-none"
+              >
+                <option value="none">Sem final de linha</option>
+                <option value="newline">Nova Linha (\n)</option>
+                <option value="carriageReturn">Retorno de Carro (\r)</option>
+                <option value="both">Ambos NL e CR (\n\r)</option>
+              </select>
+            </div>
+            <div className="mb-4 space-y-3">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={autoScroll}
+                  onChange={(e) => setAutoScroll(e.target.checked)}
+                  className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-600 focus:ring-cyan-500 rounded"
+                />
+                <span className="ml-2 text-gray-300">Autoscroll</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={showTimestamp}
+                  onChange={(e) => setShowTimestamp(e.target.checked)}
+                  className="form-checkbox h-4 w-4 text-cyan-600 bg-gray-700 border-gray-600 focus:ring-cyan-500 rounded"
+                />
+                <span className="ml-2 text-gray-300">Mostrar data/hora</span>
+              </label>
             </div>
              <div className="mb-4 p-3 bg-gray-700/50 rounded-md border border-gray-600">
                 <p className="text-gray-300 text-sm mb-3">

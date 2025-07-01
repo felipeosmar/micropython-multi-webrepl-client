@@ -90,7 +90,13 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, connect, disconnect } = useSerial(connection.port, connection.baudRate);
+  const { status, lines, sendCommand, connect, disconnect, clearOutput, autoScroll } = useSerial(
+    connection.port, 
+    connection.baudRate,
+    connection.lineEnding,
+    connection.autoScroll,
+    connection.showTimestamp
+  );
 
   const handleCommand = (cmd: string) => sendCommand(cmd);
 
@@ -103,6 +109,8 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
       onReconnect={connect}
       onEdit={onEdit}
       onRemove={onRemove}
+      autoScroll={autoScroll}
+      onClear={clearOutput}
     >
       {/* O botão de conexão foi removido, a conexão agora é automática */}
     </CardLayout>
@@ -118,10 +126,12 @@ interface CardLayoutProps {
   onEdit: (id: string) => void;
   onRemove: (id: string) => void;
   children?: React.ReactNode;
+  autoScroll?: boolean;
+  onClear?: () => void;
 }
 
 // Layout reutilizável do cartão
-const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children }) => (
+const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCommand, onReconnect, onEdit, onRemove, children, autoScroll, onClear }) => (
   <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
     <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
       <div className="flex flex-col">
@@ -149,7 +159,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCo
       </div>
     </header>
     <div className="flex-grow p-1 overflow-y-auto">
-      <Terminal lines={lines} onCommand={onCommand} />
+      <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
     </div>
     {children}
   </div>

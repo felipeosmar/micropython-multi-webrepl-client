@@ -22,4 +22,7 @@ export interface ReplConnection {
     vendorId?: number;
     productId?: number;
   } | null;
+  lineEnding?: 'none' | 'newline' | 'carriageReturn' | 'both';
+  autoScroll?: boolean;
+  showTimestamp?: boolean;
 }

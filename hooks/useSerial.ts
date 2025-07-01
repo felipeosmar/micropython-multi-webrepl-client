@@ -16,9 +16,16 @@ interface SerialPort extends EventTarget {
 }
 
 
-export const useSerial = (port: SerialPort | null | undefined, baudRate: number = 115200) => {
+export const useSerial = (
+  port: SerialPort | null | undefined, 
+  baudRate: number = 115200,
+  lineEnding: 'none' | 'newline' | 'carriageReturn' | 'both' = 'none',
+  autoScroll: boolean = true,
+  showTimestamp: boolean = false
+) => {
   const [status, setStatus] = useState<ReplStatus>(ReplStatus.DISCONNECTED);
   const [lines, setLines] = useState<string[]>([]);
+  const [clearLines, setClearLines] = useState(() => () => {});
   const reader = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const writer = useRef<WritableStreamDefaultWriter<BufferSource> | null>(null);
   const keepReading = useRef(true);
@@ -28,24 +35,31 @@ export const useSerial = (port: SerialPort | null | undefined, baudRate: number 
   const appendLine = useCallback((data: string) => {
     // Improved sanitization for MicroPython REPL
     const sanitizedData = data.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').replace(/\x1B\[[0-9;]*m/g, '');
+    
+    let processedData = sanitizedData;
+    if (showTimestamp && sanitizedData.trim().length > 0) {
+      const timestamp = new Date().toLocaleTimeString();
+      processedData = `[${timestamp}] ${sanitizedData}`;
+    }
+    
     setLines(prev => {
       if (prev.length === 0) {
-        return [sanitizedData];
+        return [processedData];
       }
       const lastLine = prev[prev.length - 1];
       // Handle newlines properly
-      if (sanitizedData.includes('\n')) {
-        const parts = sanitizedData.split('\n');
+      if (processedData.includes('\n')) {
+        const parts = processedData.split('\n');
         const firstPart = parts.shift() || '';
         const newLastLine = lastLine + firstPart;
         return [...prev.slice(0, -1), newLastLine, ...parts];
       } else {
         // Append to last line
-        const newLastLine = lastLine + sanitizedData;
+        const newLastLine = lastLine + processedData;
         return [...prev.slice(0, -1), newLastLine];
       }
     });
-  }, []);
+  }, [showTimestamp]);
 
   const disconnect = useCallback(async () => {
     keepReading.current = false;
@@ -201,9 +215,30 @@ export const useSerial = (port: SerialPort | null | undefined, baudRate: number 
       sendData('\r');
       return;
     }
-    // MicroPython REPL expects only \r
-    sendData(command + '\r');
-  }, [sendData]);
+    
+    let ending = '';
+    switch (lineEnding) {
+      case 'newline':
+        ending = '\n';
+        break;
+      case 'carriageReturn':
+        ending = '\r';
+        break;
+      case 'both':
+        ending = '\r\n';
+        break;
+      case 'none':
+      default:
+        ending = '';
+        break;
+    }
+    
+    sendData(command + ending);
+  }, [sendData, lineEnding]);
 
-  return { status, lines, sendCommand, connect, disconnect, checkPortAvailability };
+  const clearOutput = useCallback(() => {
+    setLines([]);
+  }, []);
+  
+  return { status, lines, sendCommand, connect, disconnect, checkPortAvailability, clearOutput, autoScroll };
 };

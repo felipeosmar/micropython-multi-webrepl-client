@@ -11,7 +11,28 @@ import { RefreshIcon } from './icons/RefreshIcon';
 
 const getSerialPortName = (port: SerialPort): string => {
   const info = port.getInfo();
-  return `Port ${info.usbVendorId}:${info.usbProductId}`;
+  
+  // Mapeamento de vendors conhecidos para mostrar nomes mais amigáveis
+  const vendorNames: { [key: number]: string } = {
+    0x2341: 'Arduino',
+    0x1A86: 'CH340 USB-Serial',
+    0x0403: 'FTDI',
+    0x067B: 'Prolific',
+    0x10C4: 'Silicon Labs',
+    0x1D50: 'OpenMoko',
+    0x239A: 'Adafruit',
+    0x303A: 'Espressif' // ESP32
+  };
+  
+  const vendorName = info.usbVendorId ? vendorNames[info.usbVendorId] : null;
+  
+  if (vendorName) {
+    return `${vendorName} Device`;
+  } else if (info.usbVendorId && info.usbProductId) {
+    return `USB Device (${info.usbVendorId.toString(16).padStart(4, '0')}:${info.usbProductId.toString(16).padStart(4, '0')})`;
+  } else {
+    return 'Serial Device';
+  }
 };
 
 const StatusIndicator: React.FC<{ status: ReplStatus; onReconnect?: () => void; }> = ({ status, onReconnect }) => {

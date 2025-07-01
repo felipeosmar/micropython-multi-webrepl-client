@@ -19,7 +19,7 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
   const [password, setPassword] = useState('');
   const [port, setPort] = useState<SerialPort | null>(null);
   const [baudRate, setBaudRate] = useState(115200);
-  const [lineEnding, setLineEnding] = useState<'none' | 'newline' | 'carriageReturn' | 'both'>('none');
+  const [lineEnding, setLineEnding] = useState<'none' | 'newline' | 'carriageReturn' | 'both'>('carriageReturn');
   const [autoScroll, setAutoScroll] = useState(true);
   const [showTimestamp, setShowTimestamp] = useState(false);
 
@@ -54,7 +54,7 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
       } else if (existingConnection.connectionType === 'serial') {
         setBaudRate(existingConnection.baudRate || 115200);
         setPort(existingConnection.port || null);
-        setLineEnding(existingConnection.lineEnding || 'none');
+        setLineEnding(existingConnection.lineEnding || 'carriageReturn');
         setAutoScroll(existingConnection.autoScroll ?? true);
         setShowTimestamp(existingConnection.showTimestamp || false);
       }
@@ -181,7 +181,7 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
               >
                 <option value="none">Sem final de linha</option>
                 <option value="newline">Nova Linha (\n)</option>
-                <option value="carriageReturn">Retorno de Carro (\r)</option>
+                <option value="carriageReturn">Retorno de Carro (\r) - Padrão MicroPython</option>
                 <option value="both">Ambos NL e CR (\n\r)</option>
               </select>
             </div>

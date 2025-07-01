@@ -19,7 +19,7 @@ interface SerialPort extends EventTarget {
 export const useSerial = (
   port: SerialPort | null | undefined, 
   baudRate: number = 115200,
-  lineEnding: 'none' | 'newline' | 'carriageReturn' | 'both' = 'none',
+  lineEnding: 'none' | 'newline' | 'carriageReturn' | 'both' = 'carriageReturn',
   autoScroll: boolean = true,
   showTimestamp: boolean = false
 ) => {
@@ -132,15 +132,12 @@ export const useSerial = (
   }, [appendLine]);
 
   const connect = useCallback(async () => {
-    console.log('Connect called - Port:', !!portRef.current, 'Status:', status, 'Connecting:', connecting.current);
-    
     if (!portRef.current) {
       appendLine('[SYSTEM] Error: No serial port provided.');
       setStatus(ReplStatus.ERROR);
       return;
     }
     if (status === ReplStatus.CONNECTED || status === ReplStatus.CONNECTING || connecting.current) {
-      console.log('Connect blocked - already connected or connecting');
       return;
     }
 
@@ -262,7 +259,7 @@ export const useSerial = (
           if (portRef.current === port && 
               (status === ReplStatus.DISCONNECTED || status === ReplStatus.ERROR) &&
               !connecting.current) {
-            console.log('Auto-connecting to new serial port...');
+            // Auto-connecting to new serial port
             connect();
           }
         };
@@ -275,7 +272,7 @@ export const useSerial = (
   // Separate effect for initial port setup to ensure auto-connection
   useEffect(() => {
     if (port && status === ReplStatus.DISCONNECTED && !connecting.current) {
-      console.log('Initial port detected, attempting auto-connection...');
+      // Initial port detected, attempting auto-connection
       // Very short delay to ensure everything is initialized
       const timer = setTimeout(() => {
         if (port && portRef.current === port && status === ReplStatus.DISCONNECTED && !connecting.current) {

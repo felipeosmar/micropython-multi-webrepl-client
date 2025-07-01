@@ -30,11 +30,13 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const endOfLinesRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (autoScroll) {
-      endOfLinesRef.current?.scrollIntoView();
+    if (autoScroll && scrollContainerRef.current) {
+      // Usa scrollTop para rolar apenas o container interno, não a página inteira
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [lines, autoScroll]);
 
@@ -88,7 +90,7 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
 
   return (
     <div className="font-mono text-sm text-gray-300 h-full flex flex-col" onClick={() => inputRef.current?.focus()}>
-      <div className="flex-grow overflow-y-auto pr-2">
+      <div ref={scrollContainerRef} className="flex-grow overflow-y-auto pr-2">
         {lines.map((line, index) => {
           const isError = line.includes('[SYSTEM] Error:');
           const isSystem = line.startsWith('[SYSTEM]');

@@ -61,7 +61,11 @@ const AddConnectionForm: React.FC<AddConnectionFormProps> = ({ onSave, onCancel,
       if (connectionType === 'webrepl' && ip.trim()) {
         onSave({ name, connectionType, ip, password });
       } else if (connectionType === 'serial' && port) { 
-        onSave({ name, connectionType, ip: '', port, baudRate });
+        const portInfo = {
+          vendorId: port.getInfo().usbVendorId,
+          productId: port.getInfo().usbProductId
+        };
+        onSave({ name, connectionType, ip: '', port, baudRate, portInfo });
       } else if (connectionType === 'serial' && !port) {
         alert('Please select a serial port.');
       }

@@ -10,21 +10,54 @@ const ReplManager: React.FC = () => {
   const [editingConnection, setEditingConnection] = useState<ReplConnection | null>(null);
 
   useEffect(() => {
-    try {
-      const savedConnections = localStorage.getItem('webrepl-connections');
-      if (savedConnections) {
-        setConnections(JSON.parse(savedConnections));
+    const loadConnections = async () => {
+      try {
+        const savedConnections = localStorage.getItem('webrepl-connections');
+        if (savedConnections) {
+          const parsed = JSON.parse(savedConnections);
+          
+          // Para conexões seriais, tenta reestabelecer a porta
+          const connectionsWithPorts = await Promise.all(
+            parsed.map(async (conn: any) => {
+              if (conn.connectionType === 'serial' && conn.portInfo) {
+                try {
+                  const ports = await navigator.serial.getPorts();
+                  const matchingPort = ports.find(port => {
+                    const info = port.getInfo();
+                    return info.usbVendorId === conn.portInfo.vendorId && 
+                           info.usbProductId === conn.portInfo.productId;
+                  });
+                  return { ...conn, port: matchingPort || null };
+                } catch {
+                  return { ...conn, port: null };
+                }
+              }
+              return conn;
+            })
+          );
+          
+          setConnections(connectionsWithPorts);
+        }
+      } catch (error) {
+        console.error("Failed to load connections from localStorage", error);
+        setConnections([]);
       }
-    } catch (error) {
-      console.error("Failed to load connections from localStorage", error);
-      setConnections([]);
-    }
+    };
+    
+    loadConnections();
   }, []);
 
   useEffect(() => {
     try {
       // Remove o objeto 'port' antes de salvar, pois ele não é serializável
-      const connectionsToSave = connections.map(({ port, ...rest }) => rest);
+      const connectionsToSave = connections.map(({ port, ...rest }) => ({
+        ...rest,
+        // Salva informações da porta para tentar reconectar
+        portInfo: port ? {
+          vendorId: port.getInfo().usbVendorId,
+          productId: port.getInfo().usbProductId
+        } : null
+      }));
       localStorage.setItem(
         'webrepl-connections',
         JSON.stringify(connectionsToSave)

@@ -18,4 +18,8 @@ export interface ReplConnection {
   password?: string;
   port?: SerialPort | null;
   baudRate?: number;
+  portInfo?: {
+    vendorId?: number;
+    productId?: number;
+  } | null;
 }

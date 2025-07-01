@@ -90,7 +90,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, connect, disconnect } = useSerial(connection.port);
+  const { status, lines, sendCommand, connect, disconnect } = useSerial(connection.port, connection.baudRate);
 
   const handleCommand = (cmd: string) => sendCommand(cmd);
 

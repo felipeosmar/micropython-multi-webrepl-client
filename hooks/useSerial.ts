@@ -3,39 +3,64 @@ import { ReplStatus } from '../types';
 
 // Adicionando a definição da interface SerialPort para clareza
 interface SerialPort extends EventTarget {
-  // Adicione aqui as propriedades e métodos que você usa da SerialPort API
-  // Exemplo:
   open(options: any): Promise<void>;
   close(): Promise<void>;
   readable: ReadableStream<Uint8Array> | null;
-  writable: WritableStream<Uint8Array> | null;
-  // Adicione outros métodos e propriedades conforme necessário
+  writable: WritableStream<BufferSource> | null;
+  onconnect: ((this: SerialPort, ev: Event) => any) | null;
+  ondisconnect: ((this: SerialPort, ev: Event) => any) | null;
+  connected: boolean;
+  setSignals(signals: any): Promise<void>;
+  getSignals(): Promise<any>;
+  getInfo(): any;
 }
 
 
-export const useSerial = (port: SerialPort | null | undefined) => {
+export const useSerial = (port: SerialPort | null | undefined, baudRate: number = 115200) => {
   const [status, setStatus] = useState<ReplStatus>(ReplStatus.DISCONNECTED);
   const [lines, setLines] = useState<string[]>([]);
   const reader = useRef<ReadableStreamDefaultReader<string> | null>(null);
-  const writer = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
+  const writer = useRef<WritableStreamDefaultWriter<BufferSource> | null>(null);
   const keepReading = useRef(true);
   const portRef = useRef(port);
+  const connecting = useRef(false);
 
   const appendLine = useCallback((data: string) => {
-    const sanitizedData = data.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
-    setLines(prev => [...prev, sanitizedData]);
+    // Improved sanitization for MicroPython REPL
+    const sanitizedData = data.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '').replace(/\x1B\[[0-9;]*m/g, '');
+    setLines(prev => {
+      if (prev.length === 0) {
+        return [sanitizedData];
+      }
+      const lastLine = prev[prev.length - 1];
+      // Handle newlines properly
+      if (sanitizedData.includes('\n')) {
+        const parts = sanitizedData.split('\n');
+        const firstPart = parts.shift() || '';
+        const newLastLine = lastLine + firstPart;
+        return [...prev.slice(0, -1), newLastLine, ...parts];
+      } else {
+        // Append to last line
+        const newLastLine = lastLine + sanitizedData;
+        return [...prev.slice(0, -1), newLastLine];
+      }
+    });
   }, []);
 
   const disconnect = useCallback(async () => {
     keepReading.current = false;
+    connecting.current = false;
+    
     if (reader.current) {
       try {
         await reader.current.cancel();
+        reader.current = null;
       } catch (e) {}
     }
     if (writer.current) {
       try {
         await writer.current.close();
+        writer.current = null;
       } catch (e) {}
     }
     if (portRef.current) {
@@ -55,34 +80,54 @@ export const useSerial = (port: SerialPort | null | undefined) => {
       setStatus(ReplStatus.ERROR);
       return;
     }
-    if (status === ReplStatus.CONNECTED) {
+    if (status === ReplStatus.CONNECTED || status === ReplStatus.CONNECTING || connecting.current) {
       return;
     }
 
     try {
+      connecting.current = true;
       setStatus(ReplStatus.CONNECTING);
       appendLine('[SYSTEM] Opening serial port...');
 
-      await portRef.current.open({ baudRate: 115200 });
+      // Check if port is already open
+      if (portRef.current.readable || portRef.current.writable) {
+        appendLine('[SYSTEM] Port is already open, closing first...');
+        await portRef.current.close();
+        // Wait a bit for the port to fully close
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      await portRef.current.open({ 
+        baudRate: baudRate,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none'
+      });
       appendLine(`[SYSTEM] Opened serial port.`);
 
       writer.current = portRef.current.writable!.getWriter();
 
-      const textDecoder = new TextDecoderStream();
-      const readableStreamClosed = portRef.current.readable!.pipeTo(textDecoder.writable as any);
+      const textDecoder = new TextDecoderStream('utf-8', { fatal: false, ignoreBOM: true });
+      const readable = portRef.current.readable!;
+      const readableStreamClosed = readable.pipeTo(textDecoder.writable).catch(() => {});
       reader.current = textDecoder.readable.getReader();
 
+      connecting.current = false;
       setStatus(ReplStatus.CONNECTED);
       appendLine('[SYSTEM] Connected. Press Enter to get a prompt.');
       keepReading.current = true;
 
-      while (portRef.current?.readable && keepReading.current) {
+      while (portRef.current?.readable && keepReading.current && reader.current) {
         try {
-            const { value, done } = await reader.current!.read();
+            const { value, done } = await reader.current.read();
             if (done) {
               break;
             }
-            appendLine(value);
+            // Better data filtering to prevent corruption
+            if (value && typeof value === 'string' && value.trim().length > 0) {
+              appendLine(value);
+            }
         } catch (error: any) {
             if (!keepReading.current) break;
             appendLine(`[SYSTEM] Read error: ${error.message}`);
@@ -92,22 +137,47 @@ export const useSerial = (port: SerialPort | null | undefined) => {
       
       await readableStreamClosed.catch(() => {}); // Wait for the pipe to close
 
-       if (status !== ReplStatus.ERROR) {
+      if (keepReading.current) {
           setStatus(ReplStatus.DISCONNECTED);
           appendLine('[SYSTEM] Disconnected from serial port.');
       }
 
     } catch (error: any) {
+      connecting.current = false;
       appendLine(`[SYSTEM] Connection Error: ${error.message}`);
       setStatus(ReplStatus.ERROR);
+      // Clean up resources on error
+      if (reader.current) {
+        try {
+          await reader.current.cancel();
+          reader.current = null;
+        } catch (e) {}
+      }
+      if (writer.current) {
+        try {
+          await writer.current.close();
+          writer.current = null;
+        } catch (e) {}
+      }
     }
   }, [appendLine, status]);
 
-  useEffect(() => {
-    if (portRef.current && status === ReplStatus.DISCONNECTED) {
-      connect();
+  const checkPortAvailability = useCallback(async () => {
+    if (!portRef.current) return false;
+    
+    try {
+      // Check if port is still available in the system
+      const ports = await navigator.serial.getPorts();
+      return ports.includes(portRef.current);
+    } catch {
+      return false;
     }
-  }, [connect, status]);
+  }, []);
+
+  // Update port reference when prop changes
+  useEffect(() => {
+    portRef.current = port;
+  }, [port]);
 
   useEffect(() => {
     return () => {
@@ -126,8 +196,14 @@ export const useSerial = (port: SerialPort | null | undefined) => {
   }, [appendLine]);
 
   const sendCommand = useCallback((command: string) => {
-    sendData(command + '\r\n');
+    if (command.trim() === '') {
+      // Send carriage return for new prompt
+      sendData('\r');
+      return;
+    }
+    // MicroPython REPL expects only \r
+    sendData(command + '\r');
   }, [sendData]);
 
-  return { status, lines, sendCommand, connect, disconnect };
+  return { status, lines, sendCommand, connect, disconnect, checkPortAvailability };
 };

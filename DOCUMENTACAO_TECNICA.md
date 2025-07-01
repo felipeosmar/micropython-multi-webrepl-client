@@ -335,12 +335,6 @@ npm run build    # Build de produção
 npm run preview  # Preview do build de produção
 ```
 
-### Variáveis de Ambiente
-
-```bash
-GEMINI_API_KEY=xxx    # API key para integração futura (opcional)
-```
-
 ### Dependências Principais
 
 **Runtime:**

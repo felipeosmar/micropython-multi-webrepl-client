@@ -9,6 +9,11 @@ import { WifiIcon } from './icons/WifiIcon';
 import { WifiOffIcon } from './icons/WifiOffIcon';
 import { RefreshIcon } from './icons/RefreshIcon';
 
+const getSerialPortName = (port: SerialPort): string => {
+  const info = port.getInfo();
+  return `Port ${info.usbVendorId}:${info.usbProductId}`;
+};
+
 const StatusIndicator: React.FC<{ status: ReplStatus; onReconnect?: () => void; }> = ({ status, onReconnect }) => {
   const statusConfig = {
     [ReplStatus.CONNECTED]: { text: 'Connected', color: 'text-green-400', icon: <WifiIcon className="w-5 h-5" /> },
@@ -90,7 +95,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, connect, disconnect, clearOutput, autoScroll } = useSerial(
+  const { status, lines, sendCommand, connect, clearOutput, autoScroll } = useSerial(
     connection.port, 
     connection.baudRate,
     connection.lineEnding,
@@ -137,7 +142,9 @@ const CardLayout: React.FC<CardLayoutProps> = ({ connection, status, lines, onCo
       <div className="flex flex-col">
         <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
         <p className="text-xs text-gray-400 font-mono">
-          {connection.connectionType === 'serial' ? 'Serial Connection' : connection.ip}
+          {connection.connectionType === 'serial' 
+            ? `Serial Connection - ${connection.baudRate || 115200} baud${connection.port ? ` - ${getSerialPortName(connection.port)}` : ''}`
+            : connection.ip}
         </p>
       </div>
       <div className="flex items-center space-x-4">

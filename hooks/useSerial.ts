@@ -76,21 +76,30 @@ export const useSerial = (
     if (reader.current) {
       try {
         await reader.current.cancel();
-        reader.current = null;
       } catch (e) {}
+      reader.current = null;
     }
+    
     if (writer.current) {
       try {
         await writer.current.close();
-        writer.current = null;
       } catch (e) {}
+      writer.current = null;
     }
+    
     if (portRef.current) {
       try {
-        await portRef.current.close();
-      } catch (e) {}
+        // Only close if port is actually open
+        if (portRef.current.readable || portRef.current.writable) {
+          await portRef.current.close();
+        }
+      } catch (e) {
+        // Port might already be closed, ignore errors
+      }
     }
-    if (status !== ReplStatus.DISCONNECTED) {
+    
+    // Only update status if not already disconnected and not in a silent disconnect
+    if (status !== ReplStatus.DISCONNECTED && !connecting.current) {
       setStatus(ReplStatus.DISCONNECTED);
       appendLine('[SYSTEM] Disconnected.');
     }
@@ -137,12 +146,38 @@ export const useSerial = (
       setStatus(ReplStatus.CONNECTING);
       appendLine('[SYSTEM] Opening serial port...');
 
-      // Check if port is already open
+      // Ensure clean state before connecting
+      keepReading.current = false;
+      
+      // Clean up existing connections without logging
+      if (reader.current) {
+        try {
+          await reader.current.cancel();
+        } catch (e) {}
+        reader.current = null;
+      }
+      
+      if (writer.current) {
+        try {
+          await writer.current.close();
+        } catch (e) {}
+        writer.current = null;
+      }
+      
+      // Close port if it's open
       if (portRef.current.readable || portRef.current.writable) {
-        appendLine('[SYSTEM] Port is already open, closing first...');
-        await portRef.current.close();
-        // Wait a bit for the port to fully close
-        await new Promise(resolve => setTimeout(resolve, 100));
+        try {
+          await portRef.current.close();
+          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (e) {
+          // Port might already be closed
+        }
+      }
+      
+      // Check if port is still available
+      const ports = await navigator.serial.getPorts();
+      if (!ports.includes(portRef.current)) {
+        throw new Error('Serial port is no longer available');
       }
 
       await portRef.current.open({ 
@@ -152,7 +187,7 @@ export const useSerial = (
         parity: 'none',
         flowControl: 'none'
       });
-      appendLine(`[SYSTEM] Opened serial port.`);
+      appendLine(`[SYSTEM] Opened serial port at ${baudRate} baud.`);
 
       writer.current = portRef.current.writable!.getWriter();
 
@@ -187,7 +222,7 @@ export const useSerial = (
         } catch (e) {}
       }
     }
-  }, [appendLine, status, startReadingLoop]);
+  }, [appendLine, status, startReadingLoop, disconnect]);
 
   const checkPortAvailability = useCallback(async () => {
     if (!portRef.current) return false;
@@ -206,9 +241,22 @@ export const useSerial = (
     const prevPort = portRef.current;
     portRef.current = port;
     
-    // Auto-connect when a new port is provided
-    if (port && port !== prevPort && status === ReplStatus.DISCONNECTED) {
-      connect();
+    // Auto-connect when a new port is provided (check by port info instead of reference)
+    if (port && status === ReplStatus.DISCONNECTED) {
+      const prevInfo = prevPort?.getInfo();
+      const currentInfo = port.getInfo();
+      
+      // Connect if it's a new port or if there was no previous port
+      if (!prevPort || 
+          prevInfo?.usbVendorId !== currentInfo?.usbVendorId ||
+          prevInfo?.usbProductId !== currentInfo?.usbProductId) {
+        // Small delay to ensure component is fully mounted
+        setTimeout(() => {
+          if (portRef.current === port && status === ReplStatus.DISCONNECTED) {
+            connect();
+          }
+        }, 100);
+      }
     }
   }, [port, connect, status]);
 

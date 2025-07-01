@@ -25,12 +25,12 @@ export const useSerial = (
 ) => {
   const [status, setStatus] = useState<ReplStatus>(ReplStatus.DISCONNECTED);
   const [lines, setLines] = useState<string[]>([]);
-  const [clearLines, setClearLines] = useState(() => () => {});
   const reader = useRef<ReadableStreamDefaultReader<string> | null>(null);
   const writer = useRef<WritableStreamDefaultWriter<BufferSource> | null>(null);
   const keepReading = useRef(true);
   const portRef = useRef(port);
   const connecting = useRef(false);
+  const readingLoop = useRef<Promise<void> | null>(null);
 
   const appendLine = useCallback((data: string) => {
     // Improved sanitization for MicroPython REPL
@@ -65,6 +65,14 @@ export const useSerial = (
     keepReading.current = false;
     connecting.current = false;
     
+    // Wait for reading loop to finish
+    if (readingLoop.current) {
+      try {
+        await readingLoop.current;
+      } catch (e) {}
+      readingLoop.current = null;
+    }
+    
     if (reader.current) {
       try {
         await reader.current.cancel();
@@ -87,6 +95,32 @@ export const useSerial = (
       appendLine('[SYSTEM] Disconnected.');
     }
   }, [appendLine, status]);
+
+  const startReadingLoop = useCallback(async () => {
+    if (!reader.current || !keepReading.current) return;
+    
+    try {
+      while (keepReading.current && reader.current) {
+        const { value, done } = await reader.current.read();
+        if (done) {
+          break;
+        }
+        // Better data filtering to prevent corruption
+        if (value && typeof value === 'string') {
+          appendLine(value);
+        }
+      }
+    } catch (error: any) {
+      if (keepReading.current) {
+        appendLine(`[SYSTEM] Read error: ${error.message}`);
+      }
+    } finally {
+      if (keepReading.current) {
+        setStatus(ReplStatus.DISCONNECTED);
+        appendLine('[SYSTEM] Disconnected from serial port.');
+      }
+    }
+  }, [appendLine]);
 
   const connect = useCallback(async () => {
     if (!portRef.current) {
@@ -124,7 +158,7 @@ export const useSerial = (
 
       const textDecoder = new TextDecoderStream('utf-8', { fatal: false, ignoreBOM: true });
       const readable = portRef.current.readable!;
-      const readableStreamClosed = readable.pipeTo(textDecoder.writable).catch(() => {});
+      readable.pipeTo(textDecoder.writable).catch(() => {});
       reader.current = textDecoder.readable.getReader();
 
       connecting.current = false;
@@ -132,29 +166,8 @@ export const useSerial = (
       appendLine('[SYSTEM] Connected. Press Enter to get a prompt.');
       keepReading.current = true;
 
-      while (portRef.current?.readable && keepReading.current && reader.current) {
-        try {
-            const { value, done } = await reader.current.read();
-            if (done) {
-              break;
-            }
-            // Better data filtering to prevent corruption
-            if (value && typeof value === 'string' && value.trim().length > 0) {
-              appendLine(value);
-            }
-        } catch (error: any) {
-            if (!keepReading.current) break;
-            appendLine(`[SYSTEM] Read error: ${error.message}`);
-            break;
-        }
-      }
-      
-      await readableStreamClosed.catch(() => {}); // Wait for the pipe to close
-
-      if (keepReading.current) {
-          setStatus(ReplStatus.DISCONNECTED);
-          appendLine('[SYSTEM] Disconnected from serial port.');
-      }
+      // Start the reading loop separately
+      readingLoop.current = startReadingLoop();
 
     } catch (error: any) {
       connecting.current = false;
@@ -174,7 +187,7 @@ export const useSerial = (
         } catch (e) {}
       }
     }
-  }, [appendLine, status]);
+  }, [appendLine, status, startReadingLoop]);
 
   const checkPortAvailability = useCallback(async () => {
     if (!portRef.current) return false;
@@ -188,16 +201,26 @@ export const useSerial = (
     }
   }, []);
 
-  // Update port reference when prop changes
+  // Update port reference when prop changes and auto-connect
   useEffect(() => {
+    const prevPort = portRef.current;
     portRef.current = port;
-  }, [port]);
+    
+    // Auto-connect when a new port is provided
+    if (port && port !== prevPort && status === ReplStatus.DISCONNECTED) {
+      connect();
+    }
+  }, [port, connect, status]);
 
   useEffect(() => {
     return () => {
+      keepReading.current = false;
+      if (readingLoop.current) {
+        readingLoop.current.catch(() => {});
+      }
       disconnect();
     };
-  }, [disconnect]);
+  }, []);
 
 
   const sendData = useCallback(async (data: string) => {

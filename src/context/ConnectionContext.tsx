@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { ReplConnection } from '../types';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { ReplConnection } from '../../types';
 import { DebouncedStorage } from '../utils/debounce';
 
 export interface ConnectionState {
@@ -90,7 +90,7 @@ interface ConnectionProviderProps {
 export function ConnectionProvider({ children }: ConnectionProviderProps) {
   const [state, dispatch] = useReducer(connectionReducer, initialState);
 
-  const loadConnections = async () => {
+  const loadConnections = useCallback(async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       dispatch({ type: 'SET_ERROR', payload: null });
@@ -129,23 +129,23 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load saved connections' });
       dispatch({ type: 'SET_CONNECTIONS', payload: [] });
     }
-  };
+  }, []);
 
-  const addConnection = (connection: Omit<ReplConnection, 'id'>) => {
+  const addConnection = useCallback((connection: Omit<ReplConnection, 'id'>) => {
     const newConnection: ReplConnection = {
       id: `repl-${Date.now()}`,
       ...connection,
     };
     dispatch({ type: 'ADD_CONNECTION', payload: newConnection });
-  };
+  }, []);
 
-  const updateConnection = (id: string, connection: Partial<ReplConnection>) => {
+  const updateConnection = useCallback((id: string, connection: Partial<ReplConnection>) => {
     dispatch({ type: 'UPDATE_CONNECTION', payload: { id, connection } });
-  };
+  }, []);
 
-  const removeConnection = (id: string) => {
+  const removeConnection = useCallback((id: string) => {
     dispatch({ type: 'REMOVE_CONNECTION', payload: id });
-  };
+  }, []);
 
   // Salva conexões no localStorage sempre que o estado muda
   useEffect(() => {
@@ -169,7 +169,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
     }
   }, [state.connections, state.isLoading]);
 
-  const contextValue: ConnectionContextValue = {
+  const contextValue: ConnectionContextValue = useMemo(() => ({
     state,
     actions: {
       addConnection,
@@ -177,7 +177,7 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
       removeConnection,
       loadConnections,
     },
-  };
+  }), [state, addConnection, updateConnection, removeConnection, loadConnections]);
 
   return (
     <ConnectionContext.Provider value={contextValue}>

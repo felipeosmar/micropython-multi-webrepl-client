@@ -12,7 +12,7 @@ const ReplManager: React.FC<ReplManagerProps> = ({ onEdit }) => {
 
   useEffect(() => {
     actions.loadConnections();
-  }, [actions]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = (id: string) => {
     const connectionToEdit = state.connections.find(c => c.id === id);

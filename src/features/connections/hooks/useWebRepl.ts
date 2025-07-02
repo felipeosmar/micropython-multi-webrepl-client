@@ -231,8 +231,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Processar mensagens para comandos de arquivo também
   useEffect(() => {
     if (lines.length > 0) {
-      const lastLine = lines[lines.length - 1];
-      fileCommands.processMessage(lastLine);
+      // Processa toda a mensagem concatenada, não apenas a última linha
+      const allMessages = lines.join('\n');
+      fileCommands.processMessage(allMessages);
     }
   }, [lines, fileCommands]);
 

@@ -15,18 +15,31 @@ export const useSimpleFileCommands = (
     buffer: string;
     isActive: boolean;
   }[]>([]);
+  
+  const lastProcessedLength = useRef(0);
 
   /**
    * Processa mensagens recebidas, apenas para comandos de arquivo
    */
-  const processMessage = useCallback((message: string) => {
-    if (commandQueue.current.length === 0) return;
+  const processMessage = useCallback((fullMessage: string) => {
+    if (commandQueue.current.length === 0) {
+      // Reset contador quando não há comandos ativos
+      lastProcessedLength.current = fullMessage.length;
+      return;
+    }
 
     const currentCommand = commandQueue.current[0];
     if (!currentCommand || !currentCommand.isActive) return;
 
-    // Adiciona a nova mensagem ao buffer
-    currentCommand.buffer += message;
+    // Verifica se há novo conteúdo para processar
+    if (fullMessage.length <= lastProcessedLength.current) return;
+    
+    // Pega apenas o novo conteúdo
+    const newContent = fullMessage.substring(lastProcessedLength.current);
+    lastProcessedLength.current = fullMessage.length;
+
+    // Adiciona o novo conteúdo ao buffer do comando
+    currentCommand.buffer += newContent;
 
     // Procura pelo marcador de fim do comando
     const endMarker = `__END_${currentCommand.commandId}__`;
@@ -83,6 +96,12 @@ export const useSimpleFileCommands = (
     command: string,
     timeoutMs: number = 3000
   ): Promise<any> => {
+    // Previne execução simultânea de comandos
+    if (commandQueue.current.length > 0) {
+      console.log(`[FILE CMD] Command queue busy, rejecting new command`);
+      throw new Error('Another file command is already executing');
+    }
+
     return new Promise((resolve, reject) => {
       const commandId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
@@ -108,17 +127,9 @@ export const useSimpleFileCommands = (
         isActive: true
       });
 
-      // Envolve comando com marcadores únicos
-      const wrappedCommand = `
-try:
-    print("__START_${commandId}__")
-    ${command}
-    print("__END_${commandId}__")
-except Exception as e:
-    print("__START_${commandId}__")
-    print("ERROR:", str(e))
-    print("__END_${commandId}__")
-`;
+      // Envolve comando com marcadores únicos - uma linha só
+      const wrappedCommand = `try: print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")
+except Exception as e: print("__START_${commandId}__"); print("ERROR:", str(e)); print("__END_${commandId}__")`;
 
       // Envia comando normalmente pelo terminal
       console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
@@ -131,18 +142,7 @@ except Exception as e:
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<any[]> => {
     try {
-      const command = `
-import uos
-result = []
-for item in uos.ilistdir('${path}'):
-    item_type = 'directory' if item[1] == 0x4000 else 'file'
-    result.append({
-        'name': item[0],
-        'type': item_type,
-        'size': item[3] if item_type == 'file' else None
-    })
-print(result)
-`;
+      const command = `import uos; result = []; [result.append({'name': item[0], 'type': 'directory' if item[1] == 0x4000 else 'file', 'size': item[3] if item[1] != 0x4000 else None}) for item in uos.ilistdir('${path}')]; print(result)`;
       
       const result = await executeCommand(command, 5000);
       return Array.isArray(result) ? result : [];
@@ -157,11 +157,7 @@ print(result)
    */
   const readFile = useCallback(async (filePath: string): Promise<string> => {
     try {
-      const command = `
-with open('${filePath}', 'r') as f:
-    content = f.read()
-print(repr(content))
-`;
+      const command = `with open('${filePath}', 'r') as f: content = f.read(); print(repr(content))`;
       
       const result = await executeCommand(command, 8000);
       
@@ -185,12 +181,8 @@ print(repr(content))
    */
   const writeFile = useCallback(async (filePath: string, content: string): Promise<string> => {
     try {
-      const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const command = `
-with open('${filePath}', 'w') as f:
-    f.write('${escapedContent}')
-print("SUCCESS")
-`;
+      const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+      const command = `with open('${filePath}', 'w') as f: f.write('${escapedContent}'); print("SUCCESS")`;
       
       const result = await executeCommand(command, 8000);
       return result;
@@ -204,11 +196,7 @@ print("SUCCESS")
    */
   const createDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
-      const command = `
-import uos
-uos.mkdir('${dirPath}')
-print("SUCCESS")
-`;
+      const command = `import uos; uos.mkdir('${dirPath}'); print("SUCCESS")`;
       
       const result = await executeCommand(command, 5000);
       return result;
@@ -222,11 +210,7 @@ print("SUCCESS")
    */
   const deleteFile = useCallback(async (filePath: string): Promise<string> => {
     try {
-      const command = `
-import uos
-uos.remove('${filePath}')
-print("SUCCESS")
-`;
+      const command = `import uos; uos.remove('${filePath}'); print("SUCCESS")`;
       
       const result = await executeCommand(command, 5000);
       return result;
@@ -240,11 +224,7 @@ print("SUCCESS")
    */
   const deleteDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
-      const command = `
-import uos
-uos.rmdir('${dirPath}')
-print("SUCCESS")
-`;
+      const command = `import uos; uos.rmdir('${dirPath}'); print("SUCCESS")`;
       
       const result = await executeCommand(command, 5000);
       return result;

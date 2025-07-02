@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
-import { useSimpleFileCommands } from './useSimpleFileCommands';
 
 /**
  * Hook customizado para gerenciar conexões WebREPL com MicroPython
@@ -23,14 +22,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const passwordSent = useRef(false);
   const effectId = useRef(0); // Add a ref to track effect instances
 
-  // Inicializa sistema de comandos simples
-  const simpleFileCommands = useSimpleFileCommands(
-    useCallback((command: string) => {
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(command + '\r');
-      }
-    }, [])
-  );
 
   /**
    * Adiciona uma nova linha ao terminal com sanitição
@@ -145,13 +136,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
-      // Processa comandos de arquivo apenas se contém marcadores específicos
-      // Isso permite que o terminal funcione normalmente
-      if (data.includes('__START_') && data.includes('__END_')) {
-        simpleFileCommands.processMessage(data);
-      }
-      
-      // Sempre mostra a mensagem no terminal
+      // Simplesmente mostra todas as mensagens no terminal
       appendLine(data);
        setStatus(prevStatus => {
         if (data.includes('Password:')) {
@@ -215,7 +200,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
     sendData, 
     sendCommand, 
     reconnect,
-    // Exposar funções de comando de arquivo
-    fileCommands: simpleFileCommands
+    // Comandos de arquivo temporariamente desabilitados
+    fileCommands: null
   };
 };

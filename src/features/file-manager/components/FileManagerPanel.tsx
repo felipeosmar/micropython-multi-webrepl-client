@@ -47,7 +47,7 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
 
   // Carrega lista de arquivos inicial quando conecta
   useEffect(() => {
-    if (isConnected) {
+    if (isConnected && items.length === 0 && !loading) {
       listFiles('/');
     }
   }, [isConnected]); // Removido listFiles da dependência para evitar loops

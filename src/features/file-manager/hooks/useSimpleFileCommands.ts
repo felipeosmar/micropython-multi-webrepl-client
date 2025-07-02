@@ -31,34 +31,28 @@ export const useSimpleFileCommands = (
     const currentCommand = commandQueue.current[0];
     if (!currentCommand || !currentCommand.isActive) return;
 
-    // Verifica se há novo conteúdo para processar
-    if (fullMessage.length <= lastProcessedLength.current) return;
-    
-    // Pega apenas o novo conteúdo
-    const newContent = fullMessage.substring(lastProcessedLength.current);
-    
-    // Só processa se contém marcadores do nosso sistema ou se já estamos rastreando um comando
-    const hasOurMarkers = newContent.includes('__START_') || newContent.includes('__END_') || currentCommand.buffer.length > 0;
-    if (!hasOurMarkers) {
-      lastProcessedLength.current = fullMessage.length;
+    const startMarker = `__START_${currentCommand.commandId}__`;
+    const endMarker = `__END_${currentCommand.commandId}__`;
+
+    // Só processa se a mensagem contém os marcadores do comando atual
+    if (!fullMessage.includes(startMarker) && !fullMessage.includes(endMarker)) {
       return;
     }
-    
-    lastProcessedLength.current = fullMessage.length;
 
-    // Adiciona o novo conteúdo ao buffer do comando
-    currentCommand.buffer += newContent;
+    // Atualiza buffer apenas se ainda não tem os marcadores ou se há novos dados
+    if (!currentCommand.buffer.includes(startMarker) || 
+        (!currentCommand.buffer.includes(endMarker) && fullMessage.includes(endMarker))) {
+      currentCommand.buffer = fullMessage;
+      console.log(`[FILE CMD] Updated buffer for ${currentCommand.commandId}`);
+    }
 
     // Procura pelo marcador de fim do comando
-    const endMarker = `__END_${currentCommand.commandId}__`;
-    
     if (currentCommand.buffer.includes(endMarker)) {
       const command = commandQueue.current.shift();
       if (command) {
         clearTimeout(command.timeout);
         
         // Extrai resultado entre os marcadores
-        const startMarker = `__START_${command.commandId}__`;
         const startIndex = command.buffer.indexOf(startMarker);
         const endIndex = command.buffer.indexOf(endMarker);
         
@@ -104,10 +98,10 @@ export const useSimpleFileCommands = (
     command: string,
     timeoutMs: number = 3000
   ): Promise<any> => {
-    // Previne execução simultânea de comandos
-    if (commandQueue.current.length > 0) {
-      console.log(`[FILE CMD] Command queue busy, rejecting new command`);
-      throw new Error('Another file command is already executing');
+    // Previne execução simultânea de comandos - aguarda se há comando em execução
+    while (commandQueue.current.length > 0) {
+      console.log(`[FILE CMD] Command queue busy, waiting...`);
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
 
     return new Promise((resolve, reject) => {
@@ -135,8 +129,8 @@ export const useSimpleFileCommands = (
         isActive: true
       });
 
-      // Envolve comando com marcadores únicos - tenta manter simples
-      const wrappedCommand = `print("__START_${commandId}__");${command.replace(/\n/g, ';')};print("__END_${commandId}__")`;
+      // Envolve comando com marcadores únicos - linha única
+      const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
 
       // Envia comando normalmente pelo terminal
       console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
@@ -149,19 +143,53 @@ export const useSimpleFileCommands = (
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<any[]> => {
     try {
-      // Comando atualizado para usar 'os' em vez de 'uos' (MicroPython moderno)
-      const command = `import os; files = []; [files.append({'name': f[0], 'type': 'dir' if f[1] == 0x4000 else 'file', 'size': f[3] if f[1] != 0x4000 else 0}) for f in os.ilistdir('${path}')]; print(files)`;
+      // Comando super simples em uma linha válida - usando exec() para multilinhas
+      const command = `exec("import os\\nfor f in os.ilistdir('${path}'):\\n    print(f[0], f[1], f[3])")`;
       
       const result = await executeCommand(command, 8000);
-      return Array.isArray(result) ? result : [];
+      
+      // Processa resultado linha por linha
+      if (typeof result === 'string') {
+        const lines = result.split('\n').filter(line => line.trim());
+        const files = lines.map(line => {
+          const parts = line.trim().split(' ');
+          if (parts.length >= 3) {
+            const name = parts[0];
+            const type = parseInt(parts[1]) === 0x4000 ? 'dir' : 'file';
+            const size = parseInt(parts[2]) || 0;
+            return { name, type, size };
+          }
+          return null;
+        }).filter(Boolean);
+        return files;
+      }
+      
+      return [];
     } catch (error) {
       console.error('ListFiles error:', error);
-      // Fallback para uos se os não funcionar (versões antigas)
+      // Fallback para uos se os não funcionar
       try {
         console.log('Trying fallback with uos module...');
-        const fallbackCommand = `import uos; files = []; [files.append({'name': f[0], 'type': 'dir' if f[1] == 0x4000 else 'file', 'size': f[3] if f[1] != 0x4000 else 0}) for f in uos.ilistdir('${path}')]; print(files)`;
+        const fallbackCommand = `exec("import uos\\nfor f in uos.ilistdir('${path}'):\\n    print(f[0], f[1], f[3])")`;
+        
         const fallbackResult = await executeCommand(fallbackCommand, 8000);
-        return Array.isArray(fallbackResult) ? fallbackResult : [];
+        
+        if (typeof fallbackResult === 'string') {
+          const lines = fallbackResult.split('\n').filter(line => line.trim());
+          const files = lines.map(line => {
+            const parts = line.trim().split(' ');
+            if (parts.length >= 3) {
+              const name = parts[0];
+              const type = parseInt(parts[1]) === 0x4000 ? 'dir' : 'file';
+              const size = parseInt(parts[2]) || 0;
+              return { name, type, size };
+            }
+            return null;
+          }).filter(Boolean);
+          return files;
+        }
+        
+        return [];
       } catch (fallbackError) {
         console.error('Both os and uos failed:', fallbackError);
         return [];

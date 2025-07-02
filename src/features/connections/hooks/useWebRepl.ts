@@ -173,8 +173,22 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
-      // Simplesmente mostra todas as mensagens no terminal
-      appendLine(data);
+      // Sempre acumula todas as mensagens para processamento de comandos de arquivo
+      allMessages.current += data;
+      
+      // Filtra comandos de arquivo do terminal principal
+      // Só mostra no terminal se não contém marcadores de comando de arquivo
+      const isFileCommand = data.includes('__START_') || data.includes('__END_') || 
+                           data.includes('exec("import os') || data.includes('exec("import uos');
+      
+      if (!isFileCommand) {
+        appendLine(data);
+      }
+      
+      // Processa comandos de arquivo se há marcadores
+      if (data.includes('__START_') || data.includes('__END_')) {
+        fileCommands.processMessage(allMessages.current);
+      }
        setStatus(prevStatus => {
         if (data.includes('Password:')) {
             if (prevStatus === ReplStatus.PASSWORD && passwordSent.current) {
@@ -230,6 +244,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
         socket.close();
       }
       ws.current = null;
+      
+      // Limpa buffer de mensagens
+      allMessages.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
@@ -245,17 +262,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendFileCommand);
 
-  // Processar mensagens para comandos de arquivo apenas quando necessário
-  useEffect(() => {
-    if (lines.length > 0) {
-      // Processa toda a mensagem concatenada, não apenas a última linha
-      const allMessages = lines.join('\n');
-      // Só processa se há marcadores de comando de arquivo
-      if (allMessages.includes('__START_') || allMessages.includes('__END_')) {
-        fileCommands.processMessage(allMessages);
-      }
-    }
-  }, [lines, fileCommands]);
+  // Estado separado para armazenar todas as mensagens (incluindo comandos de arquivo)
+  const allMessages = useRef<string>('');
 
   return { 
     status, 

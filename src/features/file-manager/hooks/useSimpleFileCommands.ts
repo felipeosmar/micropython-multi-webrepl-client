@@ -135,9 +135,8 @@ export const useSimpleFileCommands = (
         isActive: true
       });
 
-      // Envolve comando com marcadores únicos - uma linha só
-      const wrappedCommand = `try: print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")
-except Exception as e: print("__START_${commandId}__"); print("ERROR:", str(e)); print("__END_${commandId}__")`;
+      // Envolve comando com marcadores únicos - tenta manter simples
+      const wrappedCommand = `print("__START_${commandId}__");${command.replace(/\n/g, ';')};print("__END_${commandId}__")`;
 
       // Envia comando normalmente pelo terminal
       console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
@@ -146,17 +145,27 @@ except Exception as e: print("__START_${commandId}__"); print("ERROR:", str(e));
   }, [sendCommand]);
 
   /**
-   * Lista arquivos usando comando Python simples
+   * Lista arquivos usando comando Python simples com módulo 'os' moderno
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<any[]> => {
     try {
-      const command = `import uos; result = []; [result.append({'name': item[0], 'type': 'directory' if item[1] == 0x4000 else 'file', 'size': item[3] if item[1] != 0x4000 else None}) for item in uos.ilistdir('${path}')]; print(result)`;
+      // Comando atualizado para usar 'os' em vez de 'uos' (MicroPython moderno)
+      const command = `import os; files = []; [files.append({'name': f[0], 'type': 'dir' if f[1] == 0x4000 else 'file', 'size': f[3] if f[1] != 0x4000 else 0}) for f in os.ilistdir('${path}')]; print(files)`;
       
-      const result = await executeCommand(command, 5000);
+      const result = await executeCommand(command, 8000);
       return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error('ListFiles error:', error);
-      return [];
+      // Fallback para uos se os não funcionar (versões antigas)
+      try {
+        console.log('Trying fallback with uos module...');
+        const fallbackCommand = `import uos; files = []; [files.append({'name': f[0], 'type': 'dir' if f[1] == 0x4000 else 'file', 'size': f[3] if f[1] != 0x4000 else 0}) for f in uos.ilistdir('${path}')]; print(files)`;
+        const fallbackResult = await executeCommand(fallbackCommand, 8000);
+        return Array.isArray(fallbackResult) ? fallbackResult : [];
+      } catch (fallbackError) {
+        console.error('Both os and uos failed:', fallbackError);
+        return [];
+      }
     }
   }, [executeCommand]);
 
@@ -200,44 +209,62 @@ except Exception as e: print("__START_${commandId}__"); print("ERROR:", str(e));
   }, [executeCommand]);
 
   /**
-   * Cria um diretório
+   * Cria um diretório usando módulo 'os' moderno
    */
   const createDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
-      const command = `import uos; uos.mkdir('${dirPath}'); print("SUCCESS")`;
-      
+      const command = `import os; os.mkdir('${dirPath}'); print("SUCCESS")`;
       const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
-      return `ERROR: ${error}`;
+      // Fallback para uos se necessário
+      try {
+        const fallbackCommand = `import uos; uos.mkdir('${dirPath}'); print("SUCCESS")`;
+        const fallbackResult = await executeCommand(fallbackCommand, 5000);
+        return fallbackResult;
+      } catch (fallbackError) {
+        return `ERROR: ${error}`;
+      }
     }
   }, [executeCommand]);
 
   /**
-   * Deleta um arquivo
+   * Deleta um arquivo usando módulo 'os' moderno
    */
   const deleteFile = useCallback(async (filePath: string): Promise<string> => {
     try {
-      const command = `import uos; uos.remove('${filePath}'); print("SUCCESS")`;
-      
+      const command = `import os; os.remove('${filePath}'); print("SUCCESS")`;
       const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
-      return `ERROR: ${error}`;
+      // Fallback para uos se necessário
+      try {
+        const fallbackCommand = `import uos; uos.remove('${filePath}'); print("SUCCESS")`;
+        const fallbackResult = await executeCommand(fallbackCommand, 5000);
+        return fallbackResult;
+      } catch (fallbackError) {
+        return `ERROR: ${error}`;
+      }
     }
   }, [executeCommand]);
 
   /**
-   * Deleta um diretório
+   * Deleta um diretório usando módulo 'os' moderno
    */
   const deleteDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
-      const command = `import uos; uos.rmdir('${dirPath}'); print("SUCCESS")`;
-      
+      const command = `import os; os.rmdir('${dirPath}'); print("SUCCESS")`;
       const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
-      return `ERROR: ${error}`;
+      // Fallback para uos se necessário
+      try {
+        const fallbackCommand = `import uos; uos.rmdir('${dirPath}'); print("SUCCESS")`;
+        const fallbackResult = await executeCommand(fallbackCommand, 5000);
+        return fallbackResult;
+      } catch (fallbackError) {
+        return `ERROR: ${error}`;
+      }
     }
   }, [executeCommand]);
 

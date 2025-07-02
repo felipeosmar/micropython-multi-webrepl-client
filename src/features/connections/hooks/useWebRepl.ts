@@ -235,8 +235,15 @@ export const useWebRepl = (url: string | null, password?: string) => {
   }, [url, appendLine, reconnectAttempt]);
 
 
+  // Função especial para comandos de arquivo que não usa reset automático
+  const sendFileCommand = useCallback((command: string) => {
+    console.log(`[WEBREPL FILE] Sending file command without reset`);
+    // Para comandos de arquivo, envia diretamente sem Ctrl+C
+    sendData(command + '\r');
+  }, [sendData]);
+
   // Integração com comandos de arquivo
-  const fileCommands = useSimpleFileCommands(sendCommand);
+  const fileCommands = useSimpleFileCommands(sendFileCommand);
 
   // Processar mensagens para comandos de arquivo apenas quando necessário
   useEffect(() => {

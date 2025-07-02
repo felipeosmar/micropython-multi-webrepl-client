@@ -50,7 +50,7 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     if (isConnected) {
       listFiles('/');
     }
-  }, [isConnected, listFiles]);
+  }, [isConnected]); // Removido listFiles da dependência para evitar loops
 
   /**
    * Gera breadcrumb do caminho atual

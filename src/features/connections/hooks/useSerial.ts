@@ -405,7 +405,7 @@ export const useSerial = (
     setLines([]);
   }, []);
 
-  // Integração com comandos de arquivo
+  // Para Serial, usa o sendCommand normal já que não tem o problema de reset
   const fileCommands = useSimpleFileCommands(sendCommand);
 
   // Processar mensagens para comandos de arquivo apenas quando necessário

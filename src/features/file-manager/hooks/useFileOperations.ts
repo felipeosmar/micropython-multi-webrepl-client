@@ -41,41 +41,24 @@ export const useFileOperations = (
       const normalizedPath = normalizePath(path);
       
       if (!fileCommands || !fileCommands.listFiles) {
-        // Usar dados simulados enquanto debugamos o terminal
-        const simulatedItems: FileSystemItem[] = [
-          {
-            name: 'boot.py',
-            path: `${normalizedPath}/boot.py`.replace('//', '/'),
-            type: 'file',
-            size: 315
-          },
-          {
-            name: 'main.py',
-            path: `${normalizedPath}/main.py`.replace('//', '/'),
-            type: 'file',
-            size: 1024
-          }
-        ];
-
         setFileManagerState(prev => ({
           ...prev,
-          currentPath: normalizedPath,
-          items: simulatedItems,
-          loading: false
+          loading: false,
+          error: 'File commands not available'
         }));
-
-        return { success: true, data: simulatedItems };
+        return { success: false, error: 'File commands not available' };
       }
 
       // Use o comando real do MicroPython
+      console.log(`[FILE OPS] Listing files in path: ${normalizedPath}`);
       const items = await fileCommands.listFiles(normalizedPath);
       
       // Converte para formato interno
       const fileSystemItems: FileSystemItem[] = items.map((item: any) => ({
         name: item.name,
         path: `${normalizedPath}/${item.name}`.replace('//', '/'),
-        type: item.type === 'directory' ? 'directory' : 'file',
-        size: item.size || undefined
+        type: item.type === 'dir' ? 'directory' : 'file', // Ajustado para o novo formato
+        size: item.size > 0 ? item.size : undefined
       }));
 
       setFileManagerState(prev => ({

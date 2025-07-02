@@ -54,10 +54,11 @@ export const useSimpleFileCommands = (
         clearTimeout(command.timeout);
         
         // Extrai resultado entre os marcadores
-        const startIndex = command.buffer.indexOf(startMarker);
-        const endIndex = command.buffer.indexOf(endMarker);
+        // Usa lastIndexOf para pegar a última ocorrência dos marcadores (saída real, não comando)
+        const startIndex = command.buffer.lastIndexOf(startMarker);
+        const endIndex = command.buffer.lastIndexOf(endMarker);
         
-        if (startIndex !== -1 && endIndex !== -1) {
+        if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
           // Procura pela primeira quebra de linha após o marcador START
           const startMarkerEnd = startIndex + startMarker.length;
           const firstNewlineAfterStart = command.buffer.indexOf('\n', startMarkerEnd);

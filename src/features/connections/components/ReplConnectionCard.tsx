@@ -1,15 +1,10 @@
 import React, { useState } from 'react';
-import { ReplConnection, ReplStatus } from '@/types';
+import { ReplConnection, ReplStatus } from '../types';
 import { useWebRepl } from '../hooks/useWebRepl';
 import { useSerial } from '../hooks/useSerial';
-import Terminal from './Terminal';
-import FileManagerPanel from './FileManagerPanel';
-import { PencilIcon } from './icons/PencilIcon';
-import { TrashIcon } from './icons/TrashIcon';
-import { WifiIcon } from './icons/WifiIcon';
-import { WifiOffIcon } from './icons/WifiOffIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
-import { FolderIcon } from './icons/FolderIcon';
+import { Terminal } from '@/components/terminal';
+import { FileManagerPanel } from '@/features/file-manager/components';
+import { PencilIcon, TrashIcon, WifiIcon, WifiOffIcon, RefreshIcon, FolderIcon } from '@/components/icons';
 
 const getSerialPortName = (port: SerialPort): string => {
   const info = port.getInfo();

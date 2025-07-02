@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileSystemItem } from '../types';
+import { FileSystemItem } from '@/shared/types';
 
 /**
  * Props do FileList

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react';
-import { ReplConnection } from '../../types';
-import { DebouncedStorage } from '../utils/debounce';
+import { ReplConnection } from '../types';
+import { DebouncedStorage } from '../../../shared/utils';
 
 export interface ConnectionState {
   connections: ReplConnection[];

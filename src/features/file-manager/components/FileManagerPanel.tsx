@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useFileOperations } from '../hooks/useFileOperations';
 import FileList from './FileList';
 import FileUpload from './FileUpload';
-import { FolderPlusIcon } from './icons/FolderPlusIcon';
-import { RefreshIcon } from './icons/RefreshIcon';
+import { FolderPlusIcon, RefreshIcon } from '@/components/icons';
 
 /**
  * Props do FileManagerPanel

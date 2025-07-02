@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { FileSystemItem, FileOperationResult, FileManagerState } from '../types';
+import { FileSystemItem, FileOperationResult, FileManagerState } from '@/shared/types';
 
 /**
  * Hook para operações de arquivo via WebREPL

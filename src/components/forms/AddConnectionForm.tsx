@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ReplConnection } from '@/types';
+import { ReplConnection } from '@/shared/types';
 
 interface AddConnectionFormProps {
   onSave: (connection: Omit<ReplConnection, 'id'>) => void;

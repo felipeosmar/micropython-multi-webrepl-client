@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import ReplManager from './components/ReplManager';
-import AddConnectionForm from './components/AddConnectionForm';
-import { PlusIcon } from './components/icons/PlusIcon';
-import { ReplConnection } from '@/types';
-import { ConnectionProvider, useConnections } from './src/context/ConnectionContext';
-import { ErrorBoundary } from './src/components/ErrorBoundary';
+import { ReplManager, ConnectionProvider, useConnections } from '@/features/connections';
+import { AddConnectionForm } from '@/components/forms';
+import { PlusIcon } from '@/components/icons';
+import { ReplConnection } from '@/shared/types';
+import { ErrorBoundary } from '@/components/common';
 
 function App(): React.ReactNode {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);

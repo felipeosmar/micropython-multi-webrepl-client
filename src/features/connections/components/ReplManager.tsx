@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
-import { ReplConnection } from '@/types';
+import { ReplConnection } from '../types';
 import ReplConnectionCard from './ReplConnectionCard';
-import { useConnections } from '../src/context/ConnectionContext';
+import { useConnections } from '../context';
 
 interface ReplManagerProps {
   onEdit: (connection: ReplConnection) => void;

@@ -221,8 +221,16 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Verifica se o buffer pendente contém início de comando de arquivo
       if (pendingTerminalData.current.includes('print("__START_') || 
           pendingTerminalData.current.includes('exec("import os') ||
-          pendingTerminalData.current.includes('exec("import uos')) {
+          pendingTerminalData.current.includes('exec("import uos') ||
+          pendingTerminalData.current.includes('exec("with open(')) {
         // Possível início de comando de arquivo, não mostra ainda
+        return;
+      }
+      
+      // Verifica se é conteúdo de arquivo (string longa começando com aspas)
+      if (/^'.*/.test(pendingTerminalData.current.trim()) && pendingTerminalData.current.length > 50) {
+        // É conteúdo de arquivo, não mostra no terminal
+        pendingTerminalData.current = '';
         return;
       }
       

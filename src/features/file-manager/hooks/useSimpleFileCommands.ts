@@ -73,10 +73,16 @@ export const useSimpleFileCommands = (
           // Remove linhas vazias extras no início e fim
           result = result.replace(/^\s*\n+|\n+\s*$/g, '');
           
-          // Remove apenas linhas que claramente não são dados de arquivo
+          // Para comandos de arquivo que retornam conteúdo (readFile), preserva tudo
+          // Para comandos de listagem, filtra linhas de comando
           const lines = result.split('\n');
           const cleanLines = lines.filter(line => {
             const trimmed = line.trim();
+            // Se a linha começa com aspas, é conteúdo de arquivo
+            if (trimmed.startsWith("'") || trimmed.startsWith('"')) {
+              return true;
+            }
+            // Remove apenas linhas de comando, não dados
             return trimmed && 
                    !trimmed.startsWith('>>>') &&
                    !trimmed.includes('exec(') &&
@@ -236,9 +242,26 @@ export const useSimpleFileCommands = (
         throw new Error(result);
       }
       
-      // Remove aspas extras do repr()
-      if (typeof result === 'string' && result.startsWith("'") && result.endsWith("'")) {
-        return result.slice(1, -1).replace(/\\'/g, "'").replace(/\\n/g, '\n');
+      // Processa resultado do repr() - remove aspas e decodifica escapes
+      if (typeof result === 'string') {
+        let content = result;
+        
+        // Remove aspas simples ou duplas do início e fim
+        if ((content.startsWith("'") && content.endsWith("'")) ||
+            (content.startsWith('"') && content.endsWith('"'))) {
+          content = content.slice(1, -1);
+        }
+        
+        // Decodifica escapes do repr()
+        content = content
+          .replace(/\\'/g, "'")
+          .replace(/\\"/g, '"')
+          .replace(/\\n/g, '\n')
+          .replace(/\\r/g, '\r')
+          .replace(/\\t/g, '\t')
+          .replace(/\\\\/g, '\\');
+        
+        return content;
       }
       
       return result;

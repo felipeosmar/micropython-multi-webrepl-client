@@ -227,7 +227,8 @@ export const useSimpleFileCommands = (
    */
   const readFile = useCallback(async (filePath: string): Promise<string> => {
     try {
-      const command = `with open('${filePath}', 'r') as f: content = f.read(); print(repr(content))`;
+      // Usa exec() para permitir múltiplas declarações em uma linha
+      const command = `exec("with open('${filePath}', 'r') as f:\\n    content = f.read()\\nprint(repr(content))")`;
       
       const result = await executeCommand(command, 8000);
       
@@ -252,7 +253,7 @@ export const useSimpleFileCommands = (
   const writeFile = useCallback(async (filePath: string, content: string): Promise<string> => {
     try {
       const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-      const command = `with open('${filePath}', 'w') as f: f.write('${escapedContent}'); print("SUCCESS")`;
+      const command = `exec("with open('${filePath}', 'w') as f:\\n    f.write('${escapedContent}')\\nprint('SUCCESS')")`;
       
       const result = await executeCommand(command, 8000);
       return result;

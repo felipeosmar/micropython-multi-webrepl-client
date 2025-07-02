@@ -89,6 +89,7 @@ export const useSimpleFileCommands = (
           console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(contentStart, endIndex));
           console.log(`[FILE CMD] Start index: ${startIndex}, End index: ${endIndex}, Buffer length: ${command.buffer.length}`);
           console.log(`[FILE CMD] Full buffer:`, command.buffer);
+          console.log(`[FILE CMD] Content start position:`, contentStart, 'End position:', endIndex);
           
           try {
             // Tenta parsear como JSON se parece com estrutura de dados Python

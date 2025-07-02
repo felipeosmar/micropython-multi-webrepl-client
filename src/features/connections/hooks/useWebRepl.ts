@@ -190,9 +190,14 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Detecta fim de comando de arquivo no buffer completo
       const endMatch = allMessages.current.match(/__END_(\w+)__/);
       if (endMatch && insideFileCommand.current === endMatch[1]) {
+        const commandId = insideFileCommand.current;
         insideFileCommand.current = null;
+        
+        console.log(`[WEBREPL] Processing file command ${commandId}, buffer length:`, allMessages.current.length);
+        
         // Processa comando de arquivo
         fileCommands.processMessage(allMessages.current);
+        
         // Limpa buffer pendente após comando de arquivo
         pendingTerminalData.current = '';
         return; // Não mostra nada no terminal
@@ -280,13 +285,13 @@ export const useWebRepl = (url: string | null, password?: string) => {
       ws.current = null;
       
       // Limpa buffer de mensagens e flag de comando
-      allMessages.current = '';
       insideFileCommand.current = null;
       pendingTerminalData.current = '';
       if (pendingTimeout.current) {
         clearTimeout(pendingTimeout.current);
         pendingTimeout.current = null;
       }
+      // Não limpa allMessages aqui para permitir processamento de comandos pendentes
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);

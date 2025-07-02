@@ -1,41 +1,41 @@
 import { useCallback, useRef } from 'react';
 
 /**
- * Hook para comandos MicroPython usando raw-paste mode
- * Baseado na documentação oficial: https://docs.micropython.org/en/latest/reference/repl.html
- * 
- * Raw-paste mode é o método recomendado para automação REPL
+ * Hook simples para comandos de arquivo que não interfere com o terminal
+ * Usa comandos Python normais sem raw-paste mode
  */
-export const useRawPasteCommand = (
-  sendData: (data: string) => void
+export const useSimpleFileCommands = (
+  sendCommand: (command: string) => void
 ) => {
   const commandQueue = useRef<{
     resolve: (result: any) => void;
     reject: (error: Error) => void;
     timeout: NodeJS.Timeout;
-    expectedEnd: string;
+    commandId: string;
     buffer: string;
+    isActive: boolean;
   }[]>([]);
 
   /**
-   * Processa mensagens recebidas do WebREPL
+   * Processa mensagens recebidas, apenas para comandos de arquivo
    */
   const processMessage = useCallback((message: string) => {
     if (commandQueue.current.length === 0) return;
 
     const currentCommand = commandQueue.current[0];
+    if (!currentCommand || !currentCommand.isActive) return;
+
     currentCommand.buffer += message;
 
-    // Verifica se recebeu a resposta completa
-    if (currentCommand.buffer.includes(currentCommand.expectedEnd)) {
+    // Procura pelo marcador de fim do comando
+    const endMarker = `__END_${currentCommand.commandId}__`;
+    if (currentCommand.buffer.includes(endMarker)) {
       const command = commandQueue.current.shift();
       if (command) {
         clearTimeout(command.timeout);
         
         // Extrai resultado entre os marcadores
-        const startMarker = 'RAW_PASTE_RESULT_START';
-        const endMarker = 'RAW_PASTE_RESULT_END';
-        
+        const startMarker = `__START_${command.commandId}__`;
         const startIndex = command.buffer.indexOf(startMarker);
         const endIndex = command.buffer.indexOf(endMarker);
         
@@ -45,7 +45,7 @@ export const useRawPasteCommand = (
             .trim();
           
           try {
-            // Tenta parsear como JSON se parecer ser uma lista/objeto
+            // Tenta parsear como JSON
             if ((result.startsWith('[') && result.endsWith(']')) || 
                 (result.startsWith('{') && result.endsWith('}'))) {
               const jsonResult = result
@@ -68,19 +68,20 @@ export const useRawPasteCommand = (
   }, []);
 
   /**
-   * Executa comando usando raw-paste mode
+   * Executa comando simples usando print statements
    */
   const executeCommand = useCallback(async (
     command: string,
-    timeoutMs: number = 5000
+    timeoutMs: number = 3000
   ): Promise<any> => {
     return new Promise((resolve, reject) => {
-      const expectedEnd = 'RAW_PASTE_RESULT_END';
+      const commandId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
       const timeout = setTimeout(() => {
         // Remove da queue se timeout
-        const index = commandQueue.current.findIndex(cmd => cmd.resolve === resolve);
+        const index = commandQueue.current.findIndex(cmd => cmd.commandId === commandId);
         if (index !== -1) {
+          commandQueue.current[index].isActive = false;
           commandQueue.current.splice(index, 1);
         }
         reject(new Error(`Command timeout: ${command.substring(0, 50)}...`));
@@ -90,55 +91,47 @@ export const useRawPasteCommand = (
         resolve,
         reject,
         timeout,
-        expectedEnd,
-        buffer: ''
+        commandId,
+        buffer: '',
+        isActive: true
       });
 
-      // Envolve comando com marcadores para identificar resultado
+      // Envolve comando com marcadores únicos
       const wrappedCommand = `
 try:
-    print("RAW_PASTE_RESULT_START")
+    print("__START_${commandId}__")
     ${command}
-    print("RAW_PASTE_RESULT_END")
+    print("__END_${commandId}__")
 except Exception as e:
-    print("RAW_PASTE_RESULT_START")
+    print("__START_${commandId}__")
     print("ERROR:", str(e))
-    print("RAW_PASTE_RESULT_END")
+    print("__END_${commandId}__")
 `;
 
-      // Entra em raw-paste mode
-      sendData('\x05'); // Ctrl+E para raw-paste mode
-      
-      // Aguarda um pouco e envia o comando
-      setTimeout(() => {
-        sendData(wrappedCommand);
-        sendData('\x04'); // Ctrl+D para executar
-      }, 100);
+      // Envia comando normalmente pelo terminal
+      sendCommand(wrappedCommand);
     });
-  }, [sendData]);
+  }, [sendCommand]);
 
   /**
-   * Lista arquivos usando comando MicroPython simples
+   * Lista arquivos usando comando Python simples
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<any[]> => {
     try {
       const command = `
 import uos
 result = []
-try:
-    for item in uos.ilistdir('${path}'):
-        item_type = 'directory' if item[1] == 0x4000 else 'file'
-        result.append({
-            'name': item[0],
-            'type': item_type,
-            'size': item[3] if item_type == 'file' else None
-        })
-    print(result)
-except:
-    print([])
+for item in uos.ilistdir('${path}'):
+    item_type = 'directory' if item[1] == 0x4000 else 'file'
+    result.append({
+        'name': item[0],
+        'type': item_type,
+        'size': item[3] if item_type == 'file' else None
+    })
+print(result)
 `;
       
-      const result = await executeCommand(command, 3000);
+      const result = await executeCommand(command, 5000);
       return Array.isArray(result) ? result : [];
     } catch (error) {
       console.error('ListFiles error:', error);
@@ -152,15 +145,12 @@ except:
   const readFile = useCallback(async (filePath: string): Promise<string> => {
     try {
       const command = `
-try:
-    with open('${filePath}', 'r') as f:
-        content = f.read()
-    print(repr(content))
-except Exception as e:
-    print("ERROR:", str(e))
+with open('${filePath}', 'r') as f:
+    content = f.read()
+print(repr(content))
 `;
       
-      const result = await executeCommand(command, 5000);
+      const result = await executeCommand(command, 8000);
       
       if (typeof result === 'string' && result.startsWith('ERROR:')) {
         throw new Error(result);
@@ -184,15 +174,12 @@ except Exception as e:
     try {
       const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const command = `
-try:
-    with open('${filePath}', 'w') as f:
-        f.write('${escapedContent}')
-    print("SUCCESS")
-except Exception as e:
-    print("ERROR:", str(e))
+with open('${filePath}', 'w') as f:
+    f.write('${escapedContent}')
+print("SUCCESS")
 `;
       
-      const result = await executeCommand(command, 5000);
+      const result = await executeCommand(command, 8000);
       return result;
     } catch (error) {
       return `ERROR: ${error}`;
@@ -205,15 +192,12 @@ except Exception as e:
   const createDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
       const command = `
-try:
-    import uos
-    uos.mkdir('${dirPath}')
-    print("SUCCESS")
-except Exception as e:
-    print("ERROR:", str(e))
+import uos
+uos.mkdir('${dirPath}')
+print("SUCCESS")
 `;
       
-      const result = await executeCommand(command, 3000);
+      const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
       return `ERROR: ${error}`;
@@ -226,15 +210,12 @@ except Exception as e:
   const deleteFile = useCallback(async (filePath: string): Promise<string> => {
     try {
       const command = `
-try:
-    import uos
-    uos.remove('${filePath}')
-    print("SUCCESS")
-except Exception as e:
-    print("ERROR:", str(e))
+import uos
+uos.remove('${filePath}')
+print("SUCCESS")
 `;
       
-      const result = await executeCommand(command, 3000);
+      const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
       return `ERROR: ${error}`;
@@ -247,15 +228,12 @@ except Exception as e:
   const deleteDirectory = useCallback(async (dirPath: string): Promise<string> => {
     try {
       const command = `
-try:
-    import uos
-    uos.rmdir('${dirPath}')
-    print("SUCCESS")
-except Exception as e:
-    print("ERROR:", str(e))
+import uos
+uos.rmdir('${dirPath}')
+print("SUCCESS")
 `;
       
-      const result = await executeCommand(command, 3000);
+      const result = await executeCommand(command, 5000);
       return result;
     } catch (error) {
       return `ERROR: ${error}`;

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
+import { useSimpleFileCommands } from '../../file-manager/hooks';
 
 /**
  * Hook customizado para gerenciar conexões WebREPL com MicroPython
@@ -224,13 +225,23 @@ export const useWebRepl = (url: string | null, password?: string) => {
   }, [url, appendLine, reconnectAttempt]);
 
 
+  // Integração com comandos de arquivo
+  const fileCommands = useSimpleFileCommands(sendCommand);
+
+  // Processar mensagens para comandos de arquivo também
+  useEffect(() => {
+    if (lines.length > 0) {
+      const lastLine = lines[lines.length - 1];
+      fileCommands.processMessage(lastLine);
+    }
+  }, [lines, fileCommands]);
+
   return { 
     status, 
     lines, 
     sendData, 
     sendCommand, 
     reconnect,
-    // Comandos de arquivo temporariamente desabilitados
-    fileCommands: null
+    fileCommands
   };
 };

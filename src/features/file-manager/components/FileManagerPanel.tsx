@@ -85,19 +85,40 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
    * Manipula upload de múltiplos arquivos
    */
   const handleMultipleUpload = async (files: FileList) => {
+    console.log(`[UPLOAD] Starting upload of ${files.length} files`);
+    
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      const reader = new FileReader();
+      console.log(`[UPLOAD] Processing file ${i + 1}/${files.length}: ${file.name}`);
       
-      reader.onload = async (e) => {
-        const content = e.target?.result;
-        if (content) {
-          await uploadFile(file.name, content, currentPath);
+      try {
+        const reader = new FileReader();
+        
+        const fileContent = await new Promise<string | ArrayBuffer>((resolve, reject) => {
+          reader.onload = (e) => {
+            if (e.target?.result) {
+              resolve(e.target.result);
+            } else {
+              reject(new Error('Failed to read file'));
+            }
+          };
+          reader.onerror = () => reject(new Error('File read error'));
+          reader.readAsText(file); // Usar readAsText em vez de readAsArrayBuffer para melhor compatibilidade
+        });
+        
+        const result = await uploadFile(file.name, fileContent, currentPath);
+        
+        if (result.success) {
+          console.log(`[UPLOAD] Successfully uploaded ${file.name}`);
+        } else {
+          console.error(`[UPLOAD] Failed to upload ${file.name}:`, result.error);
         }
-      };
-      
-      reader.readAsArrayBuffer(file);
+      } catch (error) {
+        console.error(`[UPLOAD] Error processing ${file.name}:`, error);
+      }
     }
+    
+    console.log(`[UPLOAD] Finished processing all files`);
   };
 
   /**

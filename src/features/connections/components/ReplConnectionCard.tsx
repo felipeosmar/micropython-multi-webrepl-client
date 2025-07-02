@@ -116,7 +116,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, connect, clearOutput, autoScroll } = useSerial(
+  const { status, lines, sendCommand, connect, clearOutput, autoScroll, fileCommands } = useSerial(
     connection.port, 
     connection.baudRate,
     connection.lineEnding,
@@ -137,6 +137,8 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
       onRemove={onRemove}
       autoScroll={autoScroll}
       onClear={clearOutput}
+      sendCommand={sendCommand}
+      fileCommands={fileCommands}
     >
       {/* O botão de conexão foi removido, a conexão agora é automática */}
     </CardLayout>
@@ -181,7 +183,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
 
   return (
     <div className={`bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700 ${
-      isWebRepl && activeTab === 'files' ? 'w-full max-w-4xl' : ''
+      activeTab === 'files' ? 'w-full max-w-4xl' : ''
     }`}>
       <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
         <div className="flex flex-col">
@@ -211,9 +213,8 @@ const CardLayout: React.FC<CardLayoutProps> = ({
         </div>
       </header>
 
-      {/* Abas - apenas para conexões WebREPL */}
-      {isWebRepl && (
-        <div className="flex border-b border-gray-700">
+      {/* Abas - para conexões WebREPL e Serial */}
+      <div className="flex border-b border-gray-700">
           <button
             onClick={() => setActiveTab('terminal')}
             className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
@@ -238,17 +239,16 @@ const CardLayout: React.FC<CardLayoutProps> = ({
             <span>Arquivos</span>
           </button>
         </div>
-      )}
 
       {/* Conteúdo */}
       <div className="flex-grow overflow-hidden flex">
         {/* Terminal - sempre visível */}
-        <div className={`${isWebRepl && activeTab === 'files' ? 'flex-1' : 'w-full'} p-1`}>
+        <div className={`${activeTab === 'files' ? 'flex-1' : 'w-full'} p-1`}>
           <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
         </div>
         
-        {/* File Manager Sidebar - apenas visível quando aba de arquivos está ativa */}
-        {isWebRepl && activeTab === 'files' && (
+        {/* File Manager Sidebar - visível quando aba de arquivos está ativa */}
+        {activeTab === 'files' && fileCommands && (
           <div className="w-80 flex-shrink-0">
             <FileManagerPanel
               fileCommands={fileCommands}

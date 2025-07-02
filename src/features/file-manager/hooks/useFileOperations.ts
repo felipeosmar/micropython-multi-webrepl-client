@@ -110,7 +110,7 @@ export const useFileOperations = (
     }
 
     try {
-      setFileManagerState(prev => ({ ...prev, loading: true }));
+      setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
 
       const normalizedPath = normalizePath(targetPath);
       const fullPath = `${normalizedPath}/${fileName}`.replace('//', '/');
@@ -123,17 +123,21 @@ export const useFileOperations = (
         content = fileContent;
       }
       
+      console.log(`[FILE UPLOAD] Uploading ${fileName} to ${fullPath}`);
       const result = await fileCommands.writeFile(fullPath, content);
       
-      if (result === 'SUCCESS') {
+      if (result === 'SUCCESS' || result.includes('SUCCESS')) {
+        console.log(`[FILE UPLOAD] Successfully uploaded ${fileName}`);
         // Atualiza a lista de arquivos após upload
         await listFiles(fileManagerState.currentPath);
+        setFileManagerState(prev => ({ ...prev, loading: false }));
         return { success: true };
       } else {
         throw new Error(result);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer upload';
+      console.error(`[FILE UPLOAD] Error uploading ${fileName}:`, errorMessage);
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
@@ -148,24 +152,29 @@ export const useFileOperations = (
     }
 
     try {
-      setFileManagerState(prev => ({ ...prev, loading: true }));
+      setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
 
-      const normalizedPath = normalizePath(fileName);
-      const content = await fileCommands.readFile(normalizedPath);
+      // Constrói o caminho completo do arquivo
+      const fullPath = `${fileManagerState.currentPath}/${fileName}`.replace('//', '/');
+      console.log(`[FILE DOWNLOAD] Downloading file: ${fullPath}`);
       
-      if (content.startsWith('ERROR:')) {
+      const content = await fileCommands.readFile(fullPath);
+      
+      if (typeof content === 'string' && content.startsWith('ERROR:')) {
         throw new Error(content);
       }
       
+      console.log(`[FILE DOWNLOAD] Successfully downloaded ${fileName}, size: ${content.length} characters`);
       setFileManagerState(prev => ({ ...prev, loading: false }));
       
       return { success: true, data: content };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer download';
+      console.error(`[FILE DOWNLOAD] Error downloading ${fileName}:`, errorMessage);
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
-  }, [fileCommands, normalizePath]);
+  }, [fileCommands, fileManagerState.currentPath]);
 
   /**
    * Deleta um arquivo ou diretório
@@ -176,21 +185,28 @@ export const useFileOperations = (
     }
 
     try {
-      setFileManagerState(prev => ({ ...prev, loading: true }));
+      setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
 
-      const result = isDirectory 
-        ? await fileCommands.deleteDirectory(itemName)
-        : await fileCommands.deleteFile(itemName);
+      // Constrói o caminho completo do item
+      const fullPath = `${fileManagerState.currentPath}/${itemName}`.replace('//', '/');
+      console.log(`[FILE DELETE] Deleting ${isDirectory ? 'directory' : 'file'}: ${fullPath}`);
       
-      if (result === 'SUCCESS') {
+      const result = isDirectory 
+        ? await fileCommands.deleteDirectory(fullPath)
+        : await fileCommands.deleteFile(fullPath);
+      
+      if (result === 'SUCCESS' || result.includes('SUCCESS')) {
+        console.log(`[FILE DELETE] Successfully deleted ${itemName}`);
         // Atualiza a lista após deleção
         await listFiles(fileManagerState.currentPath);
+        setFileManagerState(prev => ({ ...prev, loading: false }));
         return { success: true };
       } else {
         throw new Error(result);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao deletar item';
+      console.error(`[FILE DELETE] Error deleting ${itemName}:`, errorMessage);
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
@@ -205,20 +221,25 @@ export const useFileOperations = (
     }
 
     try {
-      setFileManagerState(prev => ({ ...prev, loading: true }));
+      setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
 
       const normalizedPath = normalizePath(`${fileManagerState.currentPath}/${dirName}`);
+      console.log(`[FILE MKDIR] Creating directory: ${normalizedPath}`);
+      
       const result = await fileCommands.createDirectory(normalizedPath);
       
-      if (result === 'SUCCESS') {
+      if (result === 'SUCCESS' || result.includes('SUCCESS')) {
+        console.log(`[FILE MKDIR] Successfully created directory ${dirName}`);
         // Atualiza a lista após criação
         await listFiles(fileManagerState.currentPath);
+        setFileManagerState(prev => ({ ...prev, loading: false }));
         return { success: true };
       } else {
         throw new Error(result);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao criar diretório';
+      console.error(`[FILE MKDIR] Error creating directory ${dirName}:`, errorMessage);
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }

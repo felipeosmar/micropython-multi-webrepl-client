@@ -25,10 +25,12 @@ export const useSimpleFileCommands = (
     const currentCommand = commandQueue.current[0];
     if (!currentCommand || !currentCommand.isActive) return;
 
+    // Adiciona a nova mensagem ao buffer
     currentCommand.buffer += message;
 
     // Procura pelo marcador de fim do comando
     const endMarker = `__END_${currentCommand.commandId}__`;
+    
     if (currentCommand.buffer.includes(endMarker)) {
       const command = commandQueue.current.shift();
       if (command) {
@@ -40,12 +42,17 @@ export const useSimpleFileCommands = (
         const endIndex = command.buffer.indexOf(endMarker);
         
         if (startIndex !== -1 && endIndex !== -1) {
-          const result = command.buffer
+          let result = command.buffer
             .substring(startIndex + startMarker.length, endIndex)
             .trim();
           
+          // Remove linhas vazias extras
+          result = result.replace(/^\s*\n+|\n+\s*$/g, '');
+          
+          console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
+          
           try {
-            // Tenta parsear como JSON
+            // Tenta parsear como JSON se parece com estrutura de dados Python
             if ((result.startsWith('[') && result.endsWith(']')) || 
                 (result.startsWith('{') && result.endsWith('}'))) {
               const jsonResult = result
@@ -57,10 +64,12 @@ export const useSimpleFileCommands = (
             } else {
               command.resolve(result);
             }
-          } catch (error) {
+          } catch (parseError) {
+            console.log(`[FILE CMD] JSON parse failed, returning raw result:`, result);
             command.resolve(result);
           }
         } else {
+          console.error(`[FILE CMD] Invalid response format for command ${command.commandId}`);
           command.reject(new Error('Invalid response format'));
         }
       }
@@ -77,10 +86,13 @@ export const useSimpleFileCommands = (
     return new Promise((resolve, reject) => {
       const commandId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
       
+      console.log(`[FILE CMD] Executing command ${commandId}: ${command.substring(0, 100)}...`);
+      
       const timeout = setTimeout(() => {
         // Remove da queue se timeout
         const index = commandQueue.current.findIndex(cmd => cmd.commandId === commandId);
         if (index !== -1) {
+          console.log(`[FILE CMD] Command ${commandId} timed out after ${timeoutMs}ms`);
           commandQueue.current[index].isActive = false;
           commandQueue.current.splice(index, 1);
         }
@@ -109,6 +121,7 @@ except Exception as e:
 `;
 
       // Envia comando normalmente pelo terminal
+      console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
       sendCommand(wrappedCommand);
     });
   }, [sendCommand]);

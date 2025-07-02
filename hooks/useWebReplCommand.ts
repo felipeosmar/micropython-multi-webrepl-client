@@ -36,22 +36,33 @@ export const useWebReplCommand = (
         const endIndex = callback.buffer.indexOf(endMarker);
         
         if (startIndex !== -1 && endIndex !== -1) {
-          const response = callback.buffer.substring(
+          let response = callback.buffer.substring(
             startIndex + startMarker.length,
             endIndex
           ).trim();
+          
+          // Remove quebras de linha extras e limpa a resposta
+          response = response.replace(/^\r?\n+|\r?\n+$/g, '').trim();
           
           clearTimeout(callback.timeout);
           responseCallbacks.current.delete(id);
           
           try {
-            // Tenta fazer parse se parecer JSON
-            if (response.startsWith('[') || response.startsWith('{')) {
-              callback.resolve(JSON.parse(response));
+            // Tenta fazer parse se parecer JSON ou lista Python
+            if ((response.startsWith('[') && response.endsWith(']')) || 
+                (response.startsWith('{') && response.endsWith('}'))) {
+              // Converte aspas simples para duplas (Python para JSON)
+              const jsonResponse = response
+                .replace(/'/g, '"')
+                .replace(/True/g, 'true')
+                .replace(/False/g, 'false')
+                .replace(/None/g, 'null');
+              callback.resolve(JSON.parse(jsonResponse));
             } else {
               callback.resolve(response);
             }
           } catch (error) {
+            console.warn('Parse error for response:', response, error);
             callback.resolve(response);
           }
         }
@@ -84,16 +95,7 @@ export const useWebReplCommand = (
       });
 
       // Monta comando com marcadores para capturar resposta
-      const wrappedCommand = `
-try:
-    print("__CMD_START_${commandId}__")
-    ${command}
-    print("__CMD_END_${commandId}__")
-except Exception as e:
-    print("__CMD_START_${commandId}__")
-    print("ERROR:", str(e))
-    print("__CMD_END_${commandId}__")
-`;
+      const wrappedCommand = `try:\n    print("__CMD_START_${commandId}__")\n    ${command.replace(/\n/g, '\n    ')}\n    print("__CMD_END_${commandId}__")\nexcept Exception as e:\n    print("__CMD_START_${commandId}__")\n    print("ERROR:", str(e))\n    print("__CMD_END_${commandId}__")`;
 
       // Envia comando
       sendCommand(wrappedCommand);
@@ -104,25 +106,16 @@ except Exception as e:
    * Lista arquivos e diretórios
    */
   const listFiles = useCallback(async (path: string = '/') => {
-    const command = `
-import uos
-items = []
-try:
-    for item in uos.ilistdir('${path}'):
-        name, type_info, inode, size = item
-        item_type = 'directory' if type_info == 0x4000 else 'file'
-        items.append({
-            'name': name,
-            'type': item_type,
-            'size': size if item_type == 'file' else 0,
-            'path': '${path}/' + name if '${path}' != '/' else '/' + name
-        })
-    print(items)
-except Exception as e:
-    print("[]")
-`;
-    
-    return await executeCommand(command);
+    try {
+      // Comando mais simples para teste
+      const command = `import uos; items = []; [items.append({'name': item[0], 'type': 'directory' if item[1] == 0x4000 else 'file', 'size': item[3] if item[1] != 0x4000 else 0, 'path': ('/' + item[0]) if '${path}' == '/' else ('${path}/' + item[0])}) for item in uos.ilistdir('${path}')]; print(items)`;
+      
+      const result = await executeCommand(command, 5000); // 5 segundos timeout
+      return result;
+    } catch (error) {
+      console.error('Error in listFiles:', error);
+      return [];
+    }
   }, [executeCommand]);
 
   /**

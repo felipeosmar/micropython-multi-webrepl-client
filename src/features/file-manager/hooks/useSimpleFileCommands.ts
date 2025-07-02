@@ -58,33 +58,34 @@ export const useSimpleFileCommands = (
         const endIndex = command.buffer.indexOf(endMarker);
         
         if (startIndex !== -1 && endIndex !== -1) {
+          // Procura pela primeira quebra de linha após o marcador START
+          const startMarkerEnd = startIndex + startMarker.length;
+          const firstNewlineAfterStart = command.buffer.indexOf('\n', startMarkerEnd);
+          
+          // Se não encontrar quebra de linha, usa o final do marcador
+          const contentStart = firstNewlineAfterStart !== -1 ? firstNewlineAfterStart + 1 : startMarkerEnd;
+          
           let result = command.buffer
-            .substring(startIndex + startMarker.length, endIndex)
+            .substring(contentStart, endIndex)
             .trim();
           
-          // Remove linhas vazias extras e limpeza mais agressiva
+          // Remove linhas vazias extras no início e fim
           result = result.replace(/^\s*\n+|\n+\s*$/g, '');
           
-          // Remove restos do comando wrapper se ainda estiverem presentes
-          result = result.replace(/^\); exec\(.*?\); print\("$/m, '');
-          result = result.replace(/^.*exec\(.*?\).*$/m, '');
-          result = result.replace(/^>>> .*$/m, '');
-          
-          // Limpa linhas que são apenas parte do comando, não do resultado
+          // Remove apenas linhas que claramente não são dados de arquivo
           const lines = result.split('\n');
           const cleanLines = lines.filter(line => {
             const trimmed = line.trim();
             return trimmed && 
-                   !trimmed.startsWith('print("__') &&
-                   !trimmed.includes('exec("import') &&
                    !trimmed.startsWith('>>>') &&
-                   !trimmed.includes('); print("__END_');
+                   !trimmed.includes('exec(') &&
+                   !trimmed.includes('print(');
           });
           
           result = cleanLines.join('\n').trim();
           
           console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
-          console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(startIndex + startMarker.length, endIndex));
+          console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(contentStart, endIndex));
           console.log(`[FILE CMD] Start index: ${startIndex}, End index: ${endIndex}, Buffer length: ${command.buffer.length}`);
           console.log(`[FILE CMD] Full buffer:`, command.buffer);
           

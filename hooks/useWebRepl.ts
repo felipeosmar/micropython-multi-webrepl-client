@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
-import { useWebReplCommand } from './useWebReplCommand';
+import { useRawPasteCommand } from './useRawPasteCommand';
 
 /**
  * Hook customizado para gerenciar conexões WebREPL com MicroPython
@@ -23,16 +23,11 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const passwordSent = useRef(false);
   const effectId = useRef(0); // Add a ref to track effect instances
 
-  // Inicializa sistema de comandos
-  const webReplCommand = useWebReplCommand(
+  // Inicializa sistema de comandos raw-paste
+  const rawPasteCommand = useRawPasteCommand(
     useCallback((data: string) => {
       if (ws.current?.readyState === WebSocket.OPEN) {
         ws.current.send(data);
-      }
-    }, []),
-    useCallback((command: string) => {
-      if (ws.current?.readyState === WebSocket.OPEN) {
-        ws.current.send(command + '\r');
       }
     }, [])
   );
@@ -150,12 +145,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
-      // Processa comandos de arquivo (não exibe no terminal)
-      if (data.includes('__CMD_START_') || data.includes('__CMD_END_')) {
-        webReplCommand.processMessage(data);
-        return;
-      }
+      // Processa comandos raw-paste em paralelo sem interferir no terminal
+      rawPasteCommand.processMessage(data);
       
+      // Sempre mostra a mensagem no terminal
       appendLine(data);
        setStatus(prevStatus => {
         if (data.includes('Password:')) {
@@ -220,6 +213,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
     sendCommand, 
     reconnect,
     // Exposar funções de comando de arquivo
-    fileCommands: webReplCommand
+    fileCommands: rawPasteCommand
   };
 };

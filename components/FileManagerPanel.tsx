@@ -30,6 +30,7 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
 }) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [debugMode, setDebugMode] = useState(false);
 
   const {
     fileManagerState,
@@ -128,6 +129,26 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     }
   };
 
+  /**
+   * Testa comando simples no WebREPL
+   */
+  const testSimpleCommand = async () => {
+    if (fileCommands && fileCommands.executeCommand) {
+      try {
+        console.log('Testing simple command...');
+        const result = await fileCommands.executeCommand('print("Hello from MicroPython!")', 2000);
+        console.log('Command result:', result);
+        
+        // Agora testa listagem
+        console.log('Testing list command...');
+        const listResult = await fileCommands.listFiles('/');
+        console.log('List result:', listResult);
+      } catch (error) {
+        console.error('Test command failed:', error);
+      }
+    }
+  };
+
   if (!isConnected) {
     return (
       <div className="h-full flex items-center justify-center text-gray-400 bg-gray-900">
@@ -174,6 +195,14 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
               title="Atualizar"
             >
               <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            
+            <button
+              onClick={testSimpleCommand}
+              className="p-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors"
+              title="Testar Comando"
+            >
+              🔧
             </button>
           </div>
           

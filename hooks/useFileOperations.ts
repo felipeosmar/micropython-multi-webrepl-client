@@ -35,31 +35,34 @@ export const useFileOperations = (
    * Lista arquivos e diretórios no caminho especificado
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<FileOperationResult> => {
-    if (!fileCommands) {
-      return { success: false, error: 'Conexão não disponível' };
-    }
-
     setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
       const normalizedPath = normalizePath(path);
-      const result = await fileCommands.listFiles(normalizedPath);
       
-      const items: FileSystemItem[] = Array.isArray(result) ? result.map((item: any) => ({
+      if (!fileCommands || !fileCommands.listFiles) {
+        throw new Error('FileCommands não disponível');
+      }
+
+      // Use o comando real do MicroPython
+      const items = await fileCommands.listFiles(normalizedPath);
+      
+      // Converte para formato interno
+      const fileSystemItems: FileSystemItem[] = items.map((item: any) => ({
         name: item.name,
-        path: item.path,
-        type: item.type,
+        path: `${normalizedPath}/${item.name}`.replace('//', '/'),
+        type: item.type === 'directory' ? 'directory' : 'file',
         size: item.size || undefined
-      })) : [];
+      }));
 
       setFileManagerState(prev => ({
         ...prev,
         currentPath: normalizedPath,
-        items,
+        items: fileSystemItems,
         loading: false
       }));
 
-      return { success: true, data: items };
+      return { success: true, data: fileSystemItems };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao listar arquivos';
       setFileManagerState(prev => ({

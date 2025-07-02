@@ -107,14 +107,14 @@ const FileList: React.FC<FileListProps> = ({
               key={item.path}
               className={getItemClasses(item, isSelected)}
             >
-              {/* Layout compacto */}
+              {/* Layout compacto em uma única linha */}
               <div className="flex items-center space-x-2 w-full">
                 {/* Checkbox */}
                 <input
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => onItemSelect(item.name)}
-                  className="w-3 h-3 rounded"
+                  className="w-3 h-3 rounded flex-shrink-0"
                   onClick={(e) => e.stopPropagation()}
                 />
 
@@ -123,17 +123,24 @@ const FileList: React.FC<FileListProps> = ({
                   className="flex-1 flex items-center min-w-0 cursor-pointer"
                   onClick={() => onItemClick(item)}
                 >
-                  <span className="mr-1 text-sm">{getFileIcon(item)}</span>
+                  <span className="mr-1 text-sm flex-shrink-0">{getFileIcon(item)}</span>
                   <span className="truncate font-mono text-xs" title={item.name}>
                     {item.name}
                   </span>
                   {item.type === 'directory' && (
-                    <span className="ml-1 text-xs text-gray-500">/</span>
+                    <span className="ml-1 text-xs text-gray-500 flex-shrink-0">/</span>
                   )}
                 </div>
 
+                {/* Tamanho do arquivo */}
+                {item.size && (
+                  <div className="text-xs text-gray-500 flex-shrink-0 min-w-fit">
+                    {formatFileSize(item.size)}
+                  </div>
+                )}
+
                 {/* Ações compactas */}
-                <div className="flex space-x-1">
+                <div className="flex space-x-1 flex-shrink-0">
                   {item.type === 'file' && (
                     <button
                       onClick={(e) => {
@@ -159,13 +166,6 @@ const FileList: React.FC<FileListProps> = ({
                   </button>
                 </div>
               </div>
-
-              {/* Tamanho em linha separada se necessário */}
-              {item.size && (
-                <div className="text-xs text-gray-500 ml-6 mt-1">
-                  {formatFileSize(item.size)}
-                </div>
-              )}
             </div>
           );
         })}

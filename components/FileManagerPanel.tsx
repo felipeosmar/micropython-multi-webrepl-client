@@ -9,10 +9,8 @@ import { RefreshIcon } from './icons/RefreshIcon';
  * Props do FileManagerPanel
  */
 interface FileManagerPanelProps {
-  /** Função para enviar dados via WebREPL */
-  sendData: (data: string) => Promise<void> | void;
-  /** Função para enviar comandos via WebREPL */
-  sendCommand: (command: string) => void;
+  /** Hook de comandos WebREPL */
+  fileCommands: any;
   /** Se a conexão está ativa */
   isConnected: boolean;
 }
@@ -27,8 +25,7 @@ interface FileManagerPanelProps {
  * - Breadcrumb de navegação
  */
 const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
-  sendData,
-  sendCommand,
+  fileCommands,
   isConnected
 }) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
@@ -44,7 +41,7 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     navigateToDirectory,
     toggleItemSelection,
     clearSelection
-  } = useFileOperations(sendData, sendCommand);
+  } = useFileOperations(fileCommands);
 
   const { currentPath, items, loading, error, selectedItems } = fileManagerState;
 

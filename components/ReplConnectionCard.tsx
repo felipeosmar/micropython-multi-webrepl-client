@@ -79,7 +79,7 @@ const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica do WebREPL
 const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendData, sendCommand, reconnect } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
+  const { status, lines, sendData, sendCommand, reconnect, fileCommands } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
   const [password, setPassword] = useState('');
 
   const handleCommand = (cmd: string) => sendCommand(cmd);
@@ -101,6 +101,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
       onRemove={onRemove}
       sendData={sendData}
       sendCommand={sendCommand}
+      fileCommands={fileCommands}
     >
       {status === ReplStatus.PASSWORD && (
         <form onSubmit={handlePasswordSubmit} className="p-2 border-t border-gray-700 bg-gray-900/50">
@@ -160,6 +161,7 @@ interface CardLayoutProps {
   onClear?: () => void;
   sendData?: (data: string) => Promise<void> | void;
   sendCommand?: (command: string) => void;
+  fileCommands?: any;
 }
 
 // Layout reutilizável do cartão
@@ -175,7 +177,8 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   autoScroll, 
   onClear,
   sendData,
-  sendCommand
+  sendCommand,
+  fileCommands
 }) => {
   const [activeTab, setActiveTab] = useState<'terminal' | 'files'>('terminal');
   const isConnected = status === ReplStatus.CONNECTED;
@@ -253,8 +256,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
         {isWebRepl && activeTab === 'files' && (
           <div className="w-80 flex-shrink-0">
             <FileManagerPanel
-              sendData={sendData!}
-              sendCommand={sendCommand!}
+              fileCommands={fileCommands}
               isConnected={isConnected}
             />
           </div>

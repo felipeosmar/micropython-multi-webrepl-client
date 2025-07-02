@@ -13,8 +13,7 @@ import { FileSystemItem, FileOperationResult, FileManagerState } from '../types'
  * - Navegar entre diretórios
  */
 export const useFileOperations = (
-  sendData: (data: string) => Promise<void> | void,
-  sendCommand: (command: string) => void
+  fileCommands: any // WebReplCommand hook instance
 ) => {
   const [fileManagerState, setFileManagerState] = useState<FileManagerState>({
     currentPath: '/',
@@ -25,86 +24,42 @@ export const useFileOperations = (
   });
 
   /**
-   * Executa um comando Python e captura a resposta
+   * Normaliza o caminho do arquivo/diretório
    */
-  const executeCommand = useCallback(async (command: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Timeout na execução do comando'));
-      }, 10000);
-
-      // Criar um listener temporário para capturar a resposta
-      const originalSendCommand = sendCommand;
-      let response = '';
-      
-      // Simula captura de resposta - em implementação real, seria necessário
-      // modificar o hook useWebRepl para permitir captura de respostas específicas
-      sendCommand(command);
-      
-      clearTimeout(timeout);
-      resolve(response);
-    });
-  }, [sendCommand]);
+  const normalizePath = useCallback((path: string): string => {
+    if (path === '/' || path === '') return '/';
+    return path.startsWith('/') ? path : `/${path}`;
+  }, []);
 
   /**
    * Lista arquivos e diretórios no caminho especificado
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<FileOperationResult> => {
+    if (!fileCommands) {
+      return { success: false, error: 'Conexão não disponível' };
+    }
+
     setFileManagerState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      // Comando Python para listar arquivos com informações detalhadas
-      const command = `
-import uos
-try:
-    items = []
-    for item in uos.ilistdir('${path}'):
-        name, type_info, inode, size = item
-        item_type = 'directory' if type_info == 0x4000 else 'file'
-        items.append({
-            'name': name,
-            'type': item_type,
-            'size': size if item_type == 'file' else None
-        })
-    print('FILE_LIST_START')
-    print(items)
-    print('FILE_LIST_END')
-except Exception as e:
-    print('ERROR:', str(e))
-`;
-
-      await executeCommand(command);
+      const normalizedPath = normalizePath(path);
+      const result = await fileCommands.listFiles(normalizedPath);
       
-      // Em uma implementação real, seria necessário parser a resposta
-      // Por enquanto, vamos simular alguns arquivos para teste
-      const simulatedItems: FileSystemItem[] = [
-        {
-          name: 'boot.py',
-          path: `${path}/boot.py`,
-          type: 'file',
-          size: 245
-        },
-        {
-          name: 'main.py',
-          path: `${path}/main.py`,
-          type: 'file',
-          size: 1024
-        },
-        {
-          name: 'lib',
-          path: `${path}/lib`,
-          type: 'directory'
-        }
-      ];
+      const items: FileSystemItem[] = Array.isArray(result) ? result.map((item: any) => ({
+        name: item.name,
+        path: item.path,
+        type: item.type,
+        size: item.size || undefined
+      })) : [];
 
       setFileManagerState(prev => ({
         ...prev,
-        currentPath: path,
-        items: simulatedItems,
+        currentPath: normalizedPath,
+        items,
         loading: false
       }));
 
-      return { success: true, data: simulatedItems };
+      return { success: true, data: items };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao listar arquivos';
       setFileManagerState(prev => ({
@@ -114,7 +69,7 @@ except Exception as e:
       }));
       return { success: false, error: errorMessage };
     }
-  }, [executeCommand]);
+  }, [fileCommands, normalizePath]);
 
   /**
    * Faz upload de um arquivo para o dispositivo
@@ -124,99 +79,124 @@ except Exception as e:
     fileContent: string | ArrayBuffer,
     targetPath: string = '/'
   ): Promise<FileOperationResult> => {
+    if (!fileCommands) {
+      return { success: false, error: 'Conexão não disponível' };
+    }
+
     try {
       setFileManagerState(prev => ({ ...prev, loading: true }));
 
-      const fullPath = `${targetPath}/${fileName}`.replace('//', '/');
+      const normalizedPath = normalizePath(targetPath);
+      const fullPath = `${normalizedPath}/${fileName}`.replace('//', '/');
       
-      // Simula upload - em implementação real, usaria WebREPL file transfer
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Converte ArrayBuffer para string se necessário
+      let content: string;
+      if (fileContent instanceof ArrayBuffer) {
+        content = new TextDecoder().decode(fileContent);
+      } else {
+        content = fileContent;
+      }
       
-      // Atualiza a lista de arquivos após upload
-      await listFiles(fileManagerState.currentPath);
+      const result = await fileCommands.writeFile(fullPath, content);
       
-      return { success: true };
+      if (result === 'SUCCESS') {
+        // Atualiza a lista de arquivos após upload
+        await listFiles(fileManagerState.currentPath);
+        return { success: true };
+      } else {
+        throw new Error(result);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer upload';
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
-  }, [listFiles, fileManagerState.currentPath]);
+  }, [fileCommands, normalizePath, listFiles, fileManagerState.currentPath]);
 
   /**
    * Faz download de um arquivo do dispositivo
    */
   const downloadFile = useCallback(async (fileName: string): Promise<FileOperationResult> => {
+    if (!fileCommands) {
+      return { success: false, error: 'Conexão não disponível' };
+    }
+
     try {
       setFileManagerState(prev => ({ ...prev, loading: true }));
 
-      const command = `
-with open('${fileName}', 'rb') as f:
-    content = f.read()
-    print('FILE_CONTENT_START')
-    print(content)
-    print('FILE_CONTENT_END')
-`;
-
-      await executeCommand(command);
+      const normalizedPath = normalizePath(fileName);
+      const content = await fileCommands.readFile(normalizedPath);
       
-      // Simula download
-      const simulatedContent = `# Conteúdo simulado do arquivo ${fileName}\nprint("Hello from ${fileName}")`;
+      if (content.startsWith('ERROR:')) {
+        throw new Error(content);
+      }
       
       setFileManagerState(prev => ({ ...prev, loading: false }));
       
-      return { success: true, data: simulatedContent };
+      return { success: true, data: content };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao fazer download';
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
-  }, [executeCommand]);
+  }, [fileCommands, normalizePath]);
 
   /**
    * Deleta um arquivo ou diretório
    */
   const deleteItem = useCallback(async (itemName: string, isDirectory: boolean = false): Promise<FileOperationResult> => {
+    if (!fileCommands) {
+      return { success: false, error: 'Conexão não disponível' };
+    }
+
     try {
       setFileManagerState(prev => ({ ...prev, loading: true }));
 
-      const command = isDirectory 
-        ? `uos.rmdir('${itemName}')`
-        : `uos.remove('${itemName}')`;
-
-      await executeCommand(command);
+      const result = isDirectory 
+        ? await fileCommands.deleteDirectory(itemName)
+        : await fileCommands.deleteFile(itemName);
       
-      // Atualiza a lista após deleção
-      await listFiles(fileManagerState.currentPath);
-      
-      return { success: true };
+      if (result === 'SUCCESS') {
+        // Atualiza a lista após deleção
+        await listFiles(fileManagerState.currentPath);
+        return { success: true };
+      } else {
+        throw new Error(result);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao deletar item';
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
-  }, [executeCommand, listFiles, fileManagerState.currentPath]);
+  }, [fileCommands, listFiles, fileManagerState.currentPath]);
 
   /**
    * Cria um novo diretório
    */
   const createDirectory = useCallback(async (dirName: string): Promise<FileOperationResult> => {
+    if (!fileCommands) {
+      return { success: false, error: 'Conexão não disponível' };
+    }
+
     try {
       setFileManagerState(prev => ({ ...prev, loading: true }));
 
-      const command = `uos.mkdir('${dirName}')`;
-      await executeCommand(command);
+      const normalizedPath = normalizePath(`${fileManagerState.currentPath}/${dirName}`);
+      const result = await fileCommands.createDirectory(normalizedPath);
       
-      // Atualiza a lista após criação
-      await listFiles(fileManagerState.currentPath);
-      
-      return { success: true };
+      if (result === 'SUCCESS') {
+        // Atualiza a lista após criação
+        await listFiles(fileManagerState.currentPath);
+        return { success: true };
+      } else {
+        throw new Error(result);
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Erro ao criar diretório';
       setFileManagerState(prev => ({ ...prev, error: errorMessage, loading: false }));
       return { success: false, error: errorMessage };
     }
-  }, [executeCommand, listFiles, fileManagerState.currentPath]);
+  }, [fileCommands, normalizePath, listFiles, fileManagerState.currentPath]);
 
   /**
    * Navega para um diretório

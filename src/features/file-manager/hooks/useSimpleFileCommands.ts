@@ -36,6 +36,14 @@ export const useSimpleFileCommands = (
     
     // Pega apenas o novo conteúdo
     const newContent = fullMessage.substring(lastProcessedLength.current);
+    
+    // Só processa se contém marcadores do nosso sistema ou se já estamos rastreando um comando
+    const hasOurMarkers = newContent.includes('__START_') || newContent.includes('__END_') || currentCommand.buffer.length > 0;
+    if (!hasOurMarkers) {
+      lastProcessedLength.current = fullMessage.length;
+      return;
+    }
+    
     lastProcessedLength.current = fullMessage.length;
 
     // Adiciona o novo conteúdo ao buffer do comando

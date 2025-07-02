@@ -67,7 +67,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
   /**
    * Envia um comando para o WebREPL
-   * WebREPL espera \r como terminador de linha
+   * Implementa estratégia de reset + comando para garantir execução
    * @param command - Comando a ser executado
    */
   const sendCommand = useCallback((command: string) => {
@@ -76,8 +76,18 @@ export const useWebRepl = (url: string | null, password?: string) => {
       sendData('\r');
       return;
     }
-    // Envia comando com \r, que é o que o WebREPL espera
-    sendData(command + '\r');
+    
+    // Limpa qualquer caractere de controle invisível do comando
+    const cleanCommand = command.replace(/[\r\n\t\x00-\x1F\x7F]/g, '');
+    
+    // Estratégia de reset + comando para garantir que saia do modo de continuação
+    // 1. Envia Ctrl+C para garantir que sai de qualquer estado de continuação
+    sendData('\x03');
+    
+    // 2. Pequeno delay e depois envia o comando
+    setTimeout(() => {
+      sendData(cleanCommand + '\r');
+    }, 50); // Reduzido para 50ms para ser mais responsivo
   }, [sendData]);
 
   /**
@@ -228,12 +238,15 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendCommand);
 
-  // Processar mensagens para comandos de arquivo também
+  // Processar mensagens para comandos de arquivo apenas quando necessário
   useEffect(() => {
     if (lines.length > 0) {
       // Processa toda a mensagem concatenada, não apenas a última linha
       const allMessages = lines.join('\n');
-      fileCommands.processMessage(allMessages);
+      // Só processa se há marcadores de comando de arquivo
+      if (allMessages.includes('__START_') || allMessages.includes('__END_')) {
+        fileCommands.processMessage(allMessages);
+      }
     }
   }, [lines, fileCommands]);
 

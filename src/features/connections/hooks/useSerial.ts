@@ -408,12 +408,15 @@ export const useSerial = (
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendCommand);
 
-  // Processar mensagens para comandos de arquivo também
+  // Processar mensagens para comandos de arquivo apenas quando necessário
   useEffect(() => {
     if (lines.length > 0) {
       // Processa toda a mensagem concatenada, não apenas a última linha
       const allMessages = lines.join('\n');
-      fileCommands.processMessage(allMessages);
+      // Só processa se há marcadores de comando de arquivo
+      if (allMessages.includes('__START_') || allMessages.includes('__END_')) {
+        fileCommands.processMessage(allMessages);
+      }
     }
   }, [lines, fileCommands]);
   

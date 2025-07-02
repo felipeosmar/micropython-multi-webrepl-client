@@ -61,8 +61,26 @@ export const useSimpleFileCommands = (
             .substring(startIndex + startMarker.length, endIndex)
             .trim();
           
-          // Remove linhas vazias extras
+          // Remove linhas vazias extras e limpeza mais agressiva
           result = result.replace(/^\s*\n+|\n+\s*$/g, '');
+          
+          // Remove restos do comando wrapper se ainda estiverem presentes
+          result = result.replace(/^\); exec\(.*?\); print\("$/m, '');
+          result = result.replace(/^.*exec\(.*?\).*$/m, '');
+          result = result.replace(/^>>> .*$/m, '');
+          
+          // Limpa linhas que são apenas parte do comando, não do resultado
+          const lines = result.split('\n');
+          const cleanLines = lines.filter(line => {
+            const trimmed = line.trim();
+            return trimmed && 
+                   !trimmed.startsWith('print("__') &&
+                   !trimmed.includes('exec("import') &&
+                   !trimmed.startsWith('>>>') &&
+                   !trimmed.includes('); print("__END_');
+          });
+          
+          result = cleanLines.join('\n').trim();
           
           console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
           

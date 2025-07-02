@@ -176,12 +176,30 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Sempre acumula todas as mensagens para processamento de comandos de arquivo
       allMessages.current += data;
       
-      // Filtra comandos de arquivo do terminal principal
-      // Só mostra no terminal se não contém marcadores de comando de arquivo
-      const isFileCommand = data.includes('__START_') || data.includes('__END_') || 
-                           data.includes('exec("import os') || data.includes('exec("import uos');
+      // Detecta início de comando de arquivo
+      const startMatch = data.match(/__START_(\w+)__/);
+      if (startMatch) {
+        insideFileCommand.current = startMatch[1];
+      }
       
-      if (!isFileCommand) {
+      // Detecta fim de comando de arquivo  
+      const endMatch = data.match(/__END_(\w+)__/);
+      if (endMatch && insideFileCommand.current === endMatch[1]) {
+        insideFileCommand.current = null;
+      }
+      
+      // Verifica se é uma mensagem relacionada a comandos de arquivo
+      const isFileCommand = data.includes('__START_') || data.includes('__END_') || 
+                           data.includes('exec("import os') || data.includes('exec("import uos') ||
+                           data.includes('print("__START_') || data.includes('print("__END_') ||
+                           /print\("__START_\w+__"\)/.test(data) || /print\("__END_\w+__"\)/.test(data) ||
+                           insideFileCommand.current !== null; // Está dentro de um comando de arquivo
+      
+      // Também verifica se é uma linha que parece ser resultado de listagem de arquivos
+      const isFileListResult = /^[a-zA-Z0-9_.-]+ \d+ \d+\s*$/.test(data.trim());
+      
+      // Só mostra no terminal se não for comando de arquivo nem resultado de listagem
+      if (!isFileCommand && !isFileListResult) {
         appendLine(data);
       }
       
@@ -245,8 +263,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
       }
       ws.current = null;
       
-      // Limpa buffer de mensagens
+      // Limpa buffer de mensagens e flag de comando
       allMessages.current = '';
+      insideFileCommand.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
@@ -264,6 +283,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
   // Estado separado para armazenar todas as mensagens (incluindo comandos de arquivo)
   const allMessages = useRef<string>('');
+  const insideFileCommand = useRef<string | null>(null); // Armazena o ID do comando em execução
 
   return { 
     status, 

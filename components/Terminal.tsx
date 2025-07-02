@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 
 /**
  * Props do componente Terminal
@@ -40,15 +40,15 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
     }
   }, [lines, autoScroll]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setCommand(e.target.value);
-  };
+  }, []);
 
   /**
    * Processa o envio de comando via formulário
    * Adiciona ao histórico e limpa o campo
    */
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     onCommand(command);
     if (command.trim()) {
@@ -56,7 +56,7 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
       setHistoryIndex(-1);
     }
     setCommand('');
-  };
+  }, [command, onCommand]);
 
   /**
    * Gerencia navegação no histórico de comandos
@@ -64,7 +64,7 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
    * - Seta para baixo: próximo comando
    * - Escape: limpa campo atual
    */
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (history.length > 0 && historyIndex < history.length - 1) {
@@ -86,23 +86,33 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
       e.preventDefault();
       setCommand('');
     }
-  };
+  }, [history, historyIndex]);
+
+  // Memoize rendered lines for performance
+  const renderedLines = useMemo(() => {
+    return lines.map((line, index) => {
+      const isError = line.includes('[SYSTEM] Error:');
+      const isSystem = line.startsWith('[SYSTEM]');
+      const style = isError
+        ? 'text-red-400'
+        : isSystem
+        ? 'text-yellow-400'
+        : '';
+      return (
+         <pre key={index} className={`whitespace-pre-wrap break-words leading-tight ${style}`}>{line}</pre>
+      );
+    });
+  }, [lines]);
+
+  // Focus input on container click
+  const handleContainerClick = useCallback(() => {
+    inputRef.current?.focus();
+  }, []);
 
   return (
-    <div className="font-mono text-sm text-gray-300 h-full flex flex-col" onClick={() => inputRef.current?.focus()}>
+    <div className="font-mono text-sm text-gray-300 h-full flex flex-col" onClick={handleContainerClick}>
       <div ref={scrollContainerRef} className="flex-grow overflow-y-auto pr-2">
-        {lines.map((line, index) => {
-          const isError = line.includes('[SYSTEM] Error:');
-          const isSystem = line.startsWith('[SYSTEM]');
-          const style = isError
-            ? 'text-red-400'
-            : isSystem
-            ? 'text-yellow-400'
-            : '';
-          return (
-             <pre key={index} className={`whitespace-pre-wrap break-words leading-tight ${style}`}>{line}</pre>
-          );
-        })}
+        {renderedLines}
         <div ref={endOfLinesRef} />
       </div>
       <div className="flex flex-col pt-1">

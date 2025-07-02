@@ -1,22 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ReplStatus } from '../types';
 
-/**
- * Interface extendida do SerialPort para garantir compatibilidade com TypeScript
- * Define todos os métodos e propriedades necessários para Web Serial API
- */
-interface SerialPort extends EventTarget {
-  open(options: any): Promise<void>;
-  close(): Promise<void>;
-  readable: ReadableStream<Uint8Array> | null;
-  writable: WritableStream<BufferSource> | null;
-  onconnect: ((this: SerialPort, ev: Event) => any) | null;
-  ondisconnect: ((this: SerialPort, ev: Event) => any) | null;
-  connected: boolean;
-  setSignals(signals: any): Promise<void>;
-  getSignals(): Promise<any>;
-  getInfo(): any;
-}
+// Removido: interface duplicada - usando tipos globais do Web Serial API
 
 /**
  * Hook customizado para gerenciar conexões seriais com MicroPython
@@ -49,6 +34,7 @@ export const useSerial = (
   const portRef = useRef(port);
   const connecting = useRef(false);
   const readingLoop = useRef<Promise<void> | null>(null);
+  const abortController = useRef<AbortController | null>(null);
 
   /**
    * Adiciona uma nova linha ao terminal com sanitição e processamento
@@ -96,33 +82,58 @@ export const useSerial = (
     keepReading.current = false;
     connecting.current = false;
     
-    // Wait for reading loop to finish
+    // Cancel any ongoing operations
+    if (abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+    }
+    
+    // Wait for reading loop to finish with timeout
     if (readingLoop.current) {
       try {
-        await readingLoop.current;
+        await Promise.race([
+          readingLoop.current,
+          new Promise(resolve => setTimeout(resolve, 1000))
+        ]);
       } catch (e) {}
       readingLoop.current = null;
     }
     
+    // Cleanup streams
+    const cleanupPromises: Promise<void>[] = [];
+    
     if (reader.current) {
-      try {
-        await reader.current.cancel();
-      } catch (e) {}
-      reader.current = null;
+      cleanupPromises.push(
+        reader.current.cancel().catch(() => {}).then(() => {
+          reader.current = null;
+        })
+      );
     }
     
     if (writer.current) {
-      try {
-        await writer.current.close();
-      } catch (e) {}
-      writer.current = null;
+      cleanupPromises.push(
+        writer.current.close().catch(() => {}).then(() => {
+          writer.current = null;
+        })
+      );
     }
     
+    // Wait for cleanup with timeout
+    try {
+      await Promise.race([
+        Promise.all(cleanupPromises),
+        new Promise(resolve => setTimeout(resolve, 2000))
+      ]);
+    } catch (e) {}
+    
+    // Close port
     if (portRef.current) {
       try {
-        // Only close if port is actually open
         if (portRef.current.readable || portRef.current.writable) {
-          await portRef.current.close();
+          await Promise.race([
+            portRef.current.close(),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 1000))
+          ]);
         }
       } catch (e) {
         // Port might already be closed, ignore errors
@@ -188,6 +199,9 @@ export const useSerial = (
       setStatus(ReplStatus.CONNECTING);
       appendLine('[SYSTEM] Opening serial port...');
 
+      // Create new AbortController for this connection attempt
+      abortController.current = new AbortController();
+      
       // Ensure clean state before connecting
       keepReading.current = false;
       

@@ -3,6 +3,8 @@ import ReplManager from './components/ReplManager';
 import AddConnectionForm from './components/AddConnectionForm';
 import { PlusIcon } from './components/icons/PlusIcon';
 import { ReplConnection } from '@/types';
+import { ConnectionProvider, useConnections } from './src/context/ConnectionContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 
 function App(): React.ReactNode {
   const [isFormOpen, setIsFormOpen] = useState<boolean>(false);
@@ -19,6 +21,35 @@ function App(): React.ReactNode {
   };
 
   return (
+    <ErrorBoundary>
+      <ConnectionProvider>
+        <AppContent 
+          isFormOpen={isFormOpen}
+          editingConnection={editingConnection}
+          onFormOpen={handleFormOpen}
+          onFormClose={handleFormClose}
+          onEdit={(connection) => {
+            setEditingConnection(connection);
+            setIsFormOpen(true);
+          }}
+        />
+      </ConnectionProvider>
+    </ErrorBoundary>
+  );
+}
+
+interface AppContentProps {
+  isFormOpen: boolean;
+  editingConnection: ReplConnection | null;
+  onFormOpen: () => void;
+  onFormClose: () => void;
+  onEdit: (connection: ReplConnection) => void;
+}
+
+function AppContent({ isFormOpen, editingConnection, onFormOpen, onFormClose, onEdit }: AppContentProps) {
+  const { actions } = useConnections();
+
+  return (
     <main className="bg-gray-900 text-gray-100 min-h-screen font-sans">
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <header className="flex items-center justify-between mb-8">
@@ -31,7 +62,7 @@ function App(): React.ReactNode {
             </p>
           </div>
           <button
-            onClick={handleFormOpen}
+            onClick={onFormOpen}
             className="flex items-center space-x-2 bg-cyan-600 hover:bg-cyan-700 px-3 py-2 rounded-lg text-sm font-medium transition-colors duration-200 flex-shrink-0 ml-4"
           >
             <PlusIcon className="w-4 h-4" />
@@ -42,28 +73,19 @@ function App(): React.ReactNode {
         {isFormOpen && (
           <AddConnectionForm
             onSave={(connection) => {
-              handleFormClose();
+              onFormClose();
               if (editingConnection) {
-                // Update existing connection
-                window.dispatchEvent(new CustomEvent('updateConnection', { 
-                  detail: { id: editingConnection.id, connection } 
-                }));
+                actions.updateConnection(editingConnection.id, connection);
               } else {
-                // Add new connection
-                window.dispatchEvent(new CustomEvent('addConnection', { detail: connection }));
+                actions.addConnection(connection);
               }
             }}
-            onCancel={handleFormClose}
+            onCancel={onFormClose}
             existingConnection={editingConnection}
           />
         )}
 
-        <ReplManager 
-          onEdit={(connection) => {
-            setEditingConnection(connection);
-            setIsFormOpen(true);
-          }}
-        />
+        <ReplManager onEdit={onEdit} />
       </div>
     </main>
   );

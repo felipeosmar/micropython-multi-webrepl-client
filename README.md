@@ -161,9 +161,6 @@ src/
 ### ❌ "Port already in use"
 **Solução:** Feche outras aplicações usando a mesma porta
 
-### ❌ Duplo Enter necessário
-**Solução:** ✅ **Já corrigido!** Use terminador `\r` (padrão)
-
 ## 📚 Documentação
 
 - 📖 **[Documentação Técnica Completa](./DOCUMENTACAO_TECNICA.md)**
@@ -183,7 +180,6 @@ Contribuições são bem-vindas! Por favor:
 
 ### ✅ Concluído
 - [x] Suporte completo a WebREPL e Serial
-- [x] Interface estilo Arduino Serial Monitor
 - [x] Auto-conexão para novas conexões
 - [x] Configurações avançadas (baud, terminadores)
 - [x] Timestamps e autoscroll

@@ -21,6 +21,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const ws = useRef<WebSocket | null>(null);
   const passwordSent = useRef(false);
   const effectId = useRef(0); // Add a ref to track effect instances
+  const retryCount = useRef(0);
+  const maxRetries = 3;
+  const retryDelay = useRef(1000); // Start with 1 second
 
 
   /**
@@ -81,8 +84,31 @@ export const useWebRepl = (url: string | null, password?: string) => {
    * Incrementa o contador de tentativas para triggerar o useEffect
    */
   const reconnect = useCallback(() => {
+    retryCount.current = 0; // Reset retry count on manual reconnect
+    retryDelay.current = 1000; // Reset delay
     setReconnectAttempt(c => c + 1);
   }, []);
+
+  /**
+   * Tentativa automática de reconexão com exponential backoff
+   */
+  const scheduleRetry = useCallback(() => {
+    if (retryCount.current < maxRetries) {
+      retryCount.current += 1;
+      appendLine(`[SYSTEM] Retry attempt ${retryCount.current}/${maxRetries} in ${retryDelay.current/1000}s...`);
+      
+      setTimeout(() => {
+        setReconnectAttempt(c => c + 1);
+      }, retryDelay.current);
+      
+      // Exponential backoff: double the delay for next retry
+      retryDelay.current = Math.min(retryDelay.current * 2, 10000); // Max 10 seconds
+    } else {
+      appendLine('[SYSTEM] Max retry attempts reached. Use reconnect button to try again.');
+      retryCount.current = 0;
+      retryDelay.current = 1000;
+    }
+  }, [appendLine]);
 
 
   useEffect(() => {
@@ -168,6 +194,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
         setStatus(prevStatus => {
             if (prevStatus !== ReplStatus.ERROR) {
                 appendLine('[SYSTEM] Connection closed.');
+                // Schedule automatic retry if it was an unexpected close
+                if (prevStatus === ReplStatus.CONNECTED || prevStatus === ReplStatus.CONNECTING) {
+                  scheduleRetry();
+                }
             }
             return ReplStatus.DISCONNECTED;
         });

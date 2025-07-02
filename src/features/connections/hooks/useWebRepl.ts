@@ -176,37 +176,53 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Sempre acumula todas as mensagens para processamento de comandos de arquivo
       allMessages.current += data;
       
-      // Detecta início de comando de arquivo
-      const startMatch = data.match(/__START_(\w+)__/);
-      if (startMatch) {
+      // Adiciona dados ao buffer pendente
+      pendingTerminalData.current += data;
+      
+      // Detecta início de comando de arquivo no buffer completo
+      const startMatch = allMessages.current.match(/__START_(\w+)__/);
+      if (startMatch && !insideFileCommand.current) {
         insideFileCommand.current = startMatch[1];
+        // Limpa o buffer pendente quando detecta início de comando de arquivo
+        pendingTerminalData.current = '';
       }
       
-      // Detecta fim de comando de arquivo  
-      const endMatch = data.match(/__END_(\w+)__/);
+      // Detecta fim de comando de arquivo no buffer completo
+      const endMatch = allMessages.current.match(/__END_(\w+)__/);
       if (endMatch && insideFileCommand.current === endMatch[1]) {
         insideFileCommand.current = null;
-      }
-      
-      // Verifica se é uma mensagem relacionada a comandos de arquivo
-      const isFileCommand = data.includes('__START_') || data.includes('__END_') || 
-                           data.includes('exec("import os') || data.includes('exec("import uos') ||
-                           data.includes('print("__START_') || data.includes('print("__END_') ||
-                           /print\("__START_\w+__"\)/.test(data) || /print\("__END_\w+__"\)/.test(data) ||
-                           insideFileCommand.current !== null; // Está dentro de um comando de arquivo
-      
-      // Também verifica se é uma linha que parece ser resultado de listagem de arquivos
-      const isFileListResult = /^[a-zA-Z0-9_.-]+ \d+ \d+\s*$/.test(data.trim());
-      
-      // Só mostra no terminal se não for comando de arquivo nem resultado de listagem
-      if (!isFileCommand && !isFileListResult) {
-        appendLine(data);
-      }
-      
-      // Processa comandos de arquivo se há marcadores
-      if (data.includes('__START_') || data.includes('__END_')) {
+        // Processa comando de arquivo
         fileCommands.processMessage(allMessages.current);
+        // Limpa buffer pendente após comando de arquivo
+        pendingTerminalData.current = '';
+        return; // Não mostra nada no terminal
       }
+      
+      // Se estamos dentro de um comando de arquivo, não mostra no terminal
+      if (insideFileCommand.current !== null) {
+        return;
+      }
+      
+      // Verifica se o buffer pendente contém início de comando de arquivo
+      if (pendingTerminalData.current.includes('print("__START_') || 
+          pendingTerminalData.current.includes('exec("import os') ||
+          pendingTerminalData.current.includes('exec("import uos')) {
+        // Possível início de comando de arquivo, não mostra ainda
+        return;
+      }
+      
+      // Se chegou aqui, são dados normais do terminal
+      // Agenda timeout para mostrar dados pendentes (permite acumular fragmentos)
+      if (pendingTimeout.current) {
+        clearTimeout(pendingTimeout.current);
+      }
+      
+      pendingTimeout.current = setTimeout(() => {
+        if (pendingTerminalData.current.trim() && insideFileCommand.current === null) {
+          appendLine(pendingTerminalData.current);
+          pendingTerminalData.current = '';
+        }
+      }, 50); // 50ms de delay para acumular fragmentos
        setStatus(prevStatus => {
         if (data.includes('Password:')) {
             if (prevStatus === ReplStatus.PASSWORD && passwordSent.current) {
@@ -266,6 +282,11 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Limpa buffer de mensagens e flag de comando
       allMessages.current = '';
       insideFileCommand.current = null;
+      pendingTerminalData.current = '';
+      if (pendingTimeout.current) {
+        clearTimeout(pendingTimeout.current);
+        pendingTimeout.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
@@ -284,6 +305,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Estado separado para armazenar todas as mensagens (incluindo comandos de arquivo)
   const allMessages = useRef<string>('');
   const insideFileCommand = useRef<string | null>(null); // Armazena o ID do comando em execução
+  const pendingTerminalData = useRef<string>(''); // Buffer para dados que podem ser comandos de arquivo
+  const pendingTimeout = useRef<NodeJS.Timeout | null>(null);
 
   return { 
     status, 

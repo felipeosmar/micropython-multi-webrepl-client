@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { ReplConnection } from '../types';
 import { DebouncedStorage } from '../../../shared/utils';
 

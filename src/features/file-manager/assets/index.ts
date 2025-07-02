@@ -1,5 +1,7 @@
 // MicroPython boot script
-export { default as bootScript } from './boot.py?raw';
+import bootPy from './boot.py?raw';
+export const bootScript = bootPy;
 
 // WebREPL configuration script  
-export { default as webreplConfig } from './webrepl_cfg.py?raw';
+import webreplCfgPy from './webrepl_cfg.py?raw';
+export const webreplConfig = webreplCfgPy;

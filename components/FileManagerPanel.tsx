@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useFileOperations } from '../hooks/useFileOperations';
 import FileList from './FileList';
 import FileUpload from './FileUpload';
+import { FolderPlusIcon } from './icons/FolderPlusIcon';
+import { RefreshIcon } from './icons/RefreshIcon';
 
 /**
  * Props do FileManagerPanel
@@ -131,24 +133,25 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
 
   if (!isConnected) {
     return (
-      <div className="h-full flex items-center justify-center text-gray-400">
-        <p>Conecte-se ao dispositivo para gerenciar arquivos</p>
+      <div className="h-full flex items-center justify-center text-gray-400 bg-gray-900">
+        <p className="text-sm">Conecte-se para gerenciar arquivos</p>
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-800 rounded-lg">
-      {/* Header com breadcrumb e ações */}
-      <div className="p-4 border-b border-gray-700">
-        {/* Breadcrumb */}
-        <div className="flex items-center space-x-2 mb-3">
+    <div className="h-full flex flex-col bg-gray-900 border-l border-gray-700">
+      {/* Header compacto */}
+      <div className="p-3 border-b border-gray-700">
+        {/* Breadcrumb compacto */}
+        <div className="flex items-center space-x-1 mb-2 text-xs">
           {generateBreadcrumb().map((crumb, index) => (
             <React.Fragment key={crumb.path}>
               {index > 0 && <span className="text-gray-500">/</span>}
               <button
                 onClick={() => navigateToDirectory(crumb.path)}
-                className="text-cyan-400 hover:text-cyan-300 text-sm"
+                className="text-cyan-400 hover:text-cyan-300 truncate max-w-[80px]"
+                title={crumb.name}
               >
                 {crumb.name}
               </button>
@@ -156,72 +159,79 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
           ))}
         </div>
 
-        {/* Ações */}
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowCreateFolder(true)}
-            className="px-3 py-1 bg-cyan-600 hover:bg-cyan-700 text-white text-sm rounded transition-colors"
-          >
-            Nova Pasta
-          </button>
-          
-          <button
-            onClick={() => listFiles(currentPath)}
-            disabled={loading}
-            className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors disabled:opacity-50"
-          >
-            {loading ? 'Carregando...' : 'Atualizar'}
-          </button>
+        {/* Ações com apenas ícones */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => setShowCreateFolder(true)}
+              className="p-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded transition-colors"
+              title="Nova Pasta"
+            >
+              <FolderPlusIcon className="w-4 h-4" />
+            </button>
+            
+            <button
+              onClick={() => listFiles(currentPath)}
+              disabled={loading}
+              className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-50"
+              title="Atualizar"
+            >
+              <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
           
           {selectedItems.length > 0 && (
-            <>
-              <button
-                onClick={clearSelection}
-                className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded transition-colors"
-              >
-                Limpar Seleção ({selectedItems.length})
-              </button>
-            </>
+            <button
+              onClick={clearSelection}
+              className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded transition-colors"
+              title={`Limpar seleção de ${selectedItems.length} itens`}
+            >
+              {selectedItems.length}
+            </button>
           )}
         </div>
 
         {/* Input para criar pasta */}
         {showCreateFolder && (
-          <div className="mt-3 flex items-center space-x-2">
+          <div className="mt-2 space-y-2">
             <input
               type="text"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
               placeholder="Nome da pasta"
-              className="flex-1 px-3 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:border-cyan-500 focus:outline-none"
+              className="w-full px-2 py-1 bg-gray-700 text-white rounded border border-gray-600 focus:border-cyan-500 focus:outline-none text-xs"
               onKeyPress={(e) => e.key === 'Enter' && handleCreateFolder()}
               autoFocus
             />
-            <button
-              onClick={handleCreateFolder}
-              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded"
-            >
-              Criar
-            </button>
-            <button
-              onClick={() => {
-                setShowCreateFolder(false);
-                setNewFolderName('');
-              }}
-              className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded"
-            >
-              Cancelar
-            </button>
+            <div className="flex space-x-1">
+              <button
+                onClick={handleCreateFolder}
+                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded flex-1"
+              >
+                Criar
+              </button>
+              <button
+                onClick={() => {
+                  setShowCreateFolder(false);
+                  setNewFolderName('');
+                }}
+                className="px-2 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Upload Area */}
-      <FileUpload onFilesSelected={handleMultipleUpload} />
+      {/* Upload Area compacta */}
+      <div className="px-3 py-2">
+        <FileUpload onFilesSelected={handleMultipleUpload} />
+      </div>
 
       {/* Error Display */}
       {error && (
-        <div className="mx-4 mt-2 p-2 bg-red-900/50 border border-red-500 rounded text-red-200 text-sm">
+        <div className="mx-3 mb-2 p-2 bg-red-900/50 border border-red-500 rounded text-red-200 text-xs">
           {error}
         </div>
       )}

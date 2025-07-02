@@ -182,7 +182,9 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   const isWebRepl = connection.connectionType === 'webrepl';
 
   return (
-    <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
+    <div className={`bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700 ${
+      isWebRepl && activeTab === 'files' ? 'w-full max-w-4xl' : ''
+    }`}>
       <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
         <div className="flex flex-col">
           <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>
@@ -241,16 +243,20 @@ const CardLayout: React.FC<CardLayoutProps> = ({
       )}
 
       {/* Conteúdo */}
-      <div className="flex-grow overflow-hidden">
-        {isWebRepl && activeTab === 'files' ? (
-          <FileManagerPanel
-            sendData={sendData!}
-            sendCommand={sendCommand!}
-            isConnected={isConnected}
-          />
-        ) : (
-          <div className="p-1 h-full">
-            <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
+      <div className="flex-grow overflow-hidden flex">
+        {/* Terminal - sempre visível */}
+        <div className={`${isWebRepl && activeTab === 'files' ? 'flex-1' : 'w-full'} p-1`}>
+          <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
+        </div>
+        
+        {/* File Manager Sidebar - apenas visível quando aba de arquivos está ativa */}
+        {isWebRepl && activeTab === 'files' && (
+          <div className="w-80 flex-shrink-0">
+            <FileManagerPanel
+              sendData={sendData!}
+              sendCommand={sendCommand!}
+              isConnected={isConnected}
+            />
           </div>
         )}
       </div>

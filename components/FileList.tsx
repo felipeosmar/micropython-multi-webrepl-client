@@ -72,7 +72,7 @@ const FileList: React.FC<FileListProps> = ({
    * Retorna classe CSS baseada no tipo de arquivo
    */
   const getItemClasses = (item: FileSystemItem, isSelected: boolean): string => {
-    const baseClasses = 'flex items-center px-4 py-2 hover:bg-gray-700 cursor-pointer transition-colors';
+    const baseClasses = 'px-2 py-1 hover:bg-gray-700 transition-colors';
     const selectedClasses = isSelected ? 'bg-cyan-900/50 border-l-2 border-cyan-400' : '';
     const typeClasses = item.type === 'directory' ? 'text-cyan-300' : 'text-gray-300';
     
@@ -97,16 +97,7 @@ const FileList: React.FC<FileListProps> = ({
 
   return (
     <div className="overflow-y-auto h-full">
-      {/* Header da tabela */}
-      <div className="sticky top-0 bg-gray-800 border-b border-gray-700 px-4 py-2 text-xs text-gray-400 font-semibold">
-        <div className="flex items-center">
-          <div className="flex-1">Nome</div>
-          <div className="w-20 text-right">Tamanho</div>
-          <div className="w-24 text-center">Ações</div>
-        </div>
-      </div>
-
-      {/* Lista de itens */}
+      {/* Lista de itens compacta */}
       <div>
         {items.map((item) => {
           const isSelected = selectedItems.includes(item.name);
@@ -116,58 +107,65 @@ const FileList: React.FC<FileListProps> = ({
               key={item.path}
               className={getItemClasses(item, isSelected)}
             >
-              {/* Checkbox para seleção */}
-              <input
-                type="checkbox"
-                checked={isSelected}
-                onChange={() => onItemSelect(item.name)}
-                className="mr-3 rounded"
-                onClick={(e) => e.stopPropagation()}
-              />
+              {/* Layout compacto */}
+              <div className="flex items-center space-x-2 w-full">
+                {/* Checkbox */}
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={() => onItemSelect(item.name)}
+                  className="w-3 h-3 rounded"
+                  onClick={(e) => e.stopPropagation()}
+                />
 
-              {/* Conteúdo principal do item */}
-              <div 
-                className="flex-1 flex items-center min-w-0"
-                onClick={() => onItemClick(item)}
-              >
-                <span className="mr-2 text-lg">{getFileIcon(item)}</span>
-                <span className="truncate font-mono text-sm">{item.name}</span>
-                {item.type === 'directory' && (
-                  <span className="ml-2 text-xs text-gray-500">/</span>
-                )}
-              </div>
+                {/* Ícone e nome */}
+                <div 
+                  className="flex-1 flex items-center min-w-0 cursor-pointer"
+                  onClick={() => onItemClick(item)}
+                >
+                  <span className="mr-1 text-sm">{getFileIcon(item)}</span>
+                  <span className="truncate font-mono text-xs" title={item.name}>
+                    {item.name}
+                  </span>
+                  {item.type === 'directory' && (
+                    <span className="ml-1 text-xs text-gray-500">/</span>
+                  )}
+                </div>
 
-              {/* Tamanho */}
-              <div className="w-20 text-right text-xs text-gray-400">
-                {formatFileSize(item.size)}
-              </div>
-
-              {/* Ações */}
-              <div className="w-24 flex justify-center space-x-1">
-                {item.type === 'file' && (
+                {/* Ações compactas */}
+                <div className="flex space-x-1">
+                  {item.type === 'file' && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDownload(item.name);
+                      }}
+                      className="p-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
+                      title="Download"
+                    >
+                      ⬇
+                    </button>
+                  )}
+                  
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDownload(item.name);
+                      onDelete(item.name, item.type === 'directory');
                     }}
-                    className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                    title="Download"
+                    className="p-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                    title="Deletar"
                   >
-                    ⬇️
+                    ✕
                   </button>
-                )}
-                
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(item.name, item.type === 'directory');
-                  }}
-                  className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
-                  title="Deletar"
-                >
-                  🗑️
-                </button>
+                </div>
               </div>
+
+              {/* Tamanho em linha separada se necessário */}
+              {item.size && (
+                <div className="text-xs text-gray-500 ml-6 mt-1">
+                  {formatFileSize(item.size)}
+                </div>
+              )}
             </div>
           );
         })}

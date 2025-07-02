@@ -78,7 +78,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
    * Classes CSS baseadas no estado
    */
   const getContainerClasses = (): string => {
-    const baseClasses = 'border-2 border-dashed rounded-lg p-4 m-4 text-center transition-colors';
+    const baseClasses = 'border border-dashed rounded p-2 text-center transition-colors';
     
     if (uploading) {
       return `${baseClasses} border-yellow-500 bg-yellow-900/20 text-yellow-300`;
@@ -103,7 +103,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         accept=".py,.txt,.json,.md,.html,.css,.js,.yml,.yaml,.xml,.csv"
       />
 
-      {/* Área de drop */}
+      {/* Área de drop compacta */}
       <div
         className={getContainerClasses()}
         onDragOver={handleDragOver}
@@ -112,33 +112,21 @@ const FileUpload: React.FC<FileUploadProps> = ({
         onClick={!uploading ? openFileSelector : undefined}
       >
         {uploading ? (
-          <div className="flex flex-col items-center space-y-2">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-400"></div>
-            <p className="text-sm">Fazendo upload...</p>
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-400"></div>
+            <p className="text-xs">Uploading...</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center space-y-2">
-            <div className="text-3xl">📁</div>
-            <div>
-              <p className="text-sm font-medium">
-                {dragOver ? 'Solte os arquivos aqui' : 'Clique ou arraste arquivos aqui'}
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Suporta: .py, .txt, .json, .md, .html, .css, .js, .yml, .xml, .csv
+          <div className="flex items-center space-x-2">
+            <div className="text-lg">📁</div>
+            <div className="flex-1">
+              <p className="text-xs font-medium">
+                {dragOver ? 'Solte aqui' : 'Upload'}
               </p>
             </div>
           </div>
         )}
       </div>
-
-      {/* Instruções adicionais */}
-      {!uploading && (
-        <div className="mx-4 mb-2">
-          <p className="text-xs text-gray-500 text-center">
-            💡 Dica: Você pode selecionar múltiplos arquivos de uma vez
-          </p>
-        </div>
-      )}
     </div>
   );
 };

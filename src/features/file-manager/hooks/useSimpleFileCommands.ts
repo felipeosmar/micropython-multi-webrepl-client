@@ -41,9 +41,8 @@ export const useSimpleFileCommands = (
     
     console.log(`[FILE CMD] Processing message for ${currentCommand.commandId}, has start: ${fullMessage.includes(startMarker)}, has end: ${fullMessage.includes(endMarker)}`);
 
-    // Atualiza buffer apenas se ainda não tem os marcadores ou se há novos dados
-    if (!currentCommand.buffer.includes(startMarker) || 
-        (!currentCommand.buffer.includes(endMarker) && fullMessage.includes(endMarker))) {
+    // Atualiza buffer apenas uma vez quando há os dois marcadores
+    if (fullMessage.includes(startMarker) && fullMessage.includes(endMarker) && !currentCommand.buffer.includes(endMarker)) {
       currentCommand.buffer = fullMessage;
       console.log(`[FILE CMD] Updated buffer for ${currentCommand.commandId}`);
     }
@@ -87,6 +86,7 @@ export const useSimpleFileCommands = (
           console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
           console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(startIndex + startMarker.length, endIndex));
           console.log(`[FILE CMD] Start index: ${startIndex}, End index: ${endIndex}, Buffer length: ${command.buffer.length}`);
+          console.log(`[FILE CMD] Full buffer:`, command.buffer);
           
           try {
             // Tenta parsear como JSON se parece com estrutura de dados Python

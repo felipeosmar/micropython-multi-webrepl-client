@@ -183,6 +183,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       const startMatch = allMessages.current.match(/__START_(\w+)__/);
       if (startMatch && !insideFileCommand.current) {
         insideFileCommand.current = startMatch[1];
+        console.log(`[WEBREPL] Starting file command ${insideFileCommand.current}`);
         // Limpa o buffer pendente quando detecta início de comando de arquivo
         pendingTerminalData.current = '';
       }
@@ -191,15 +192,24 @@ export const useWebRepl = (url: string | null, password?: string) => {
       const endMatch = allMessages.current.match(/__END_(\w+)__/);
       if (endMatch && insideFileCommand.current === endMatch[1]) {
         const commandId = insideFileCommand.current;
-        insideFileCommand.current = null;
         
-        console.log(`[WEBREPL] Processing file command ${commandId}, buffer length:`, allMessages.current.length);
+        console.log(`[WEBREPL] File command ${commandId} END marker detected, waiting for data...`);
         
-        // Processa comando de arquivo
-        fileCommands.processMessage(allMessages.current);
+        // Aguarda um tempo antes de processar para garantir que todos os dados foram recebidos
+        setTimeout(() => {
+          if (insideFileCommand.current === commandId) {
+            insideFileCommand.current = null;
+            console.log(`[WEBREPL] Processing file command ${commandId} with buffer length:`, allMessages.current.length);
+            
+            // Processa comando de arquivo
+            fileCommands.processMessage(allMessages.current);
+            
+            // Limpa buffer após processamento
+            allMessages.current = '';
+            pendingTerminalData.current = '';
+          }
+        }, 100); // 100ms para aguardar dados adicionais
         
-        // Limpa buffer pendente após comando de arquivo
-        pendingTerminalData.current = '';
         return; // Não mostra nada no terminal
       }
       

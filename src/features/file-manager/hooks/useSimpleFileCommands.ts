@@ -66,8 +66,11 @@ export const useSimpleFileCommands = (
           // Se não encontrar quebra de linha, usa o final do marcador
           const contentStart = firstNewlineAfterStart !== -1 ? firstNewlineAfterStart + 1 : startMarkerEnd;
           
+          // Garante que contentStart não seja maior que endIndex
+          const safeContentStart = Math.min(contentStart, endIndex);
+          
           let result = command.buffer
-            .substring(contentStart, endIndex)
+            .substring(safeContentStart, endIndex)
             .trim();
           
           // Remove linhas vazias extras no início e fim
@@ -92,10 +95,10 @@ export const useSimpleFileCommands = (
           result = cleanLines.join('\n').trim();
           
           console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
-          console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(contentStart, endIndex));
+          console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(safeContentStart, endIndex));
           console.log(`[FILE CMD] Start index: ${startIndex}, End index: ${endIndex}, Buffer length: ${command.buffer.length}`);
           console.log(`[FILE CMD] Full buffer:`, command.buffer);
-          console.log(`[FILE CMD] Content start position:`, contentStart, 'End position:', endIndex);
+          console.log(`[FILE CMD] Content start position:`, safeContentStart, 'End position:', endIndex);
           
           try {
             // Tenta parsear como JSON se parece com estrutura de dados Python
@@ -275,49 +278,15 @@ export const useSimpleFileCommands = (
    */
   const writeFile = useCallback(async (filePath: string, content: string): Promise<string> => {
     try {
-      // Se o arquivo é muito grande, divide em chunks
-      const maxChunkSize = 800; // Tamanho máximo por comando
+      const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
       
-      if (content.length > maxChunkSize) {
-        console.log(`[FILE CMD] Large file detected (${content.length} chars), using chunked upload`);
-        
-        // Primeiro, cria/limpa o arquivo
-        let command = `exec("with open('${filePath}', 'w') as f:\\n    pass\\nprint('FILE_CREATED')")`;
-        let result = await executeCommand(command, 8000);
-        
-        if (!result.includes('FILE_CREATED')) {
-          throw new Error('Failed to create file');
-        }
-        
-        // Divide o conteúdo em chunks e escreve cada um
-        const chunks = [];
-        for (let i = 0; i < content.length; i += maxChunkSize) {
-          chunks.push(content.substring(i, i + maxChunkSize));
-        }
-        
-        for (let i = 0; i < chunks.length; i++) {
-          const chunk = chunks[i];
-          const escapedChunk = chunk.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-          
-          command = `exec("with open('${filePath}', 'a') as f:\\n    f.write('${escapedChunk}')\\nprint('CHUNK_${i + 1}_OK')")`;
-          result = await executeCommand(command, 10000);
-          
-          if (!result.includes(`CHUNK_${i + 1}_OK`)) {
-            throw new Error(`Failed to write chunk ${i + 1}`);
-          }
-          
-          console.log(`[FILE CMD] Wrote chunk ${i + 1}/${chunks.length}`);
-        }
-        
-        return 'SUCCESS';
-      } else {
-        // Arquivo pequeno, usa método original
-        const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-        const command = `exec("with open('${filePath}', 'w') as f:\\n    f.write('${escapedContent}')\\nprint('SUCCESS')")`;
-        
-        const result = await executeCommand(command, 8000);
-        return result;
-      }
+      // Para arquivos muito grandes, usa timeout maior
+      const timeout = content.length > 2000 ? 20000 : 8000;
+      
+      const command = `exec("with open('${filePath}', 'w') as f:\\n    f.write('${escapedContent}')\\nprint('SUCCESS')")`;
+      
+      const result = await executeCommand(command, timeout);
+      return result;
     } catch (error) {
       return `ERROR: ${error}`;
     }

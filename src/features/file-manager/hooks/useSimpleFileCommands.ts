@@ -275,11 +275,49 @@ export const useSimpleFileCommands = (
    */
   const writeFile = useCallback(async (filePath: string, content: string): Promise<string> => {
     try {
-      const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
-      const command = `exec("with open('${filePath}', 'w') as f:\\n    f.write('${escapedContent}')\\nprint('SUCCESS')")`;
+      // Se o arquivo é muito grande, divide em chunks
+      const maxChunkSize = 800; // Tamanho máximo por comando
       
-      const result = await executeCommand(command, 8000);
-      return result;
+      if (content.length > maxChunkSize) {
+        console.log(`[FILE CMD] Large file detected (${content.length} chars), using chunked upload`);
+        
+        // Primeiro, cria/limpa o arquivo
+        let command = `exec("with open('${filePath}', 'w') as f:\\n    pass\\nprint('FILE_CREATED')")`;
+        let result = await executeCommand(command, 8000);
+        
+        if (!result.includes('FILE_CREATED')) {
+          throw new Error('Failed to create file');
+        }
+        
+        // Divide o conteúdo em chunks e escreve cada um
+        const chunks = [];
+        for (let i = 0; i < content.length; i += maxChunkSize) {
+          chunks.push(content.substring(i, i + maxChunkSize));
+        }
+        
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          const escapedChunk = chunk.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+          
+          command = `exec("with open('${filePath}', 'a') as f:\\n    f.write('${escapedChunk}')\\nprint('CHUNK_${i + 1}_OK')")`;
+          result = await executeCommand(command, 10000);
+          
+          if (!result.includes(`CHUNK_${i + 1}_OK`)) {
+            throw new Error(`Failed to write chunk ${i + 1}`);
+          }
+          
+          console.log(`[FILE CMD] Wrote chunk ${i + 1}/${chunks.length}`);
+        }
+        
+        return 'SUCCESS';
+      } else {
+        // Arquivo pequeno, usa método original
+        const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+        const command = `exec("with open('${filePath}', 'w') as f:\\n    f.write('${escapedContent}')\\nprint('SUCCESS')")`;
+        
+        const result = await executeCommand(command, 8000);
+        return result;
+      }
     } catch (error) {
       return `ERROR: ${error}`;
     }

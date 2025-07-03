@@ -182,9 +182,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   const isWebRepl = connection.connectionType === 'webrepl';
 
   return (
-    <div className={`bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700 ${
-      activeTab === 'files' ? 'w-full max-w-4xl' : ''
-    }`}>
+    <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">
       <header className="flex items-center justify-between p-3 bg-gray-900/50 border-b border-gray-700">
         <div className="flex flex-col">
           <h3 className="font-bold text-lg text-cyan-400">{connection.name}</h3>

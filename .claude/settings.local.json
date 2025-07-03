@@ -18,7 +18,10 @@
       "mcp__ide__getDiagnostics",
       "Bash(npm install:*)",
       "Bash(npm test:*)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(npm run test:run:*)",
+      "Bash(rg:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }

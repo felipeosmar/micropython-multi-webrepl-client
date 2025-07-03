@@ -190,27 +190,33 @@ export const useWebRepl = (url: string | null, password?: string) => {
       
       // Detecta fim de comando de arquivo no buffer completo
       const endMatch = allMessages.current.match(/__END_(\w+)__/);
-      if (endMatch && insideFileCommand.current === endMatch[1]) {
-        const commandId = insideFileCommand.current;
+      if (endMatch) {
+        const endCommandId = endMatch[1];
         
-        console.log(`[WEBREPL] File command ${commandId} END marker detected, waiting for data...`);
+        if (insideFileCommand.current === endCommandId) {
+          // Marcador END corresponde ao comando atual
+          console.log(`[WEBREPL] File command ${endCommandId} END marker detected, waiting for data...`);
+          
+          // Aguarda um tempo antes de processar para garantir que todos os dados foram recebidos
+          setTimeout(() => {
+            if (insideFileCommand.current === endCommandId) {
+              insideFileCommand.current = null;
+              console.log(`[WEBREPL] Processing file command ${endCommandId} with buffer length:`, allMessages.current.length);
+              
+              // Processa comando de arquivo
+              fileCommands.processMessage(allMessages.current);
+              
+              // Limpa buffer após processamento
+              allMessages.current = '';
+              pendingTerminalData.current = '';
+            }
+          }, 100); // 100ms para aguardar dados adicionais
+        } else {
+          // Marcador END órfão de comando anterior - filtrar silenciosamente
+          console.log(`[WEBREPL] Orphan END marker detected: ${endCommandId}, current command: ${insideFileCommand.current}`);
+        }
         
-        // Aguarda um tempo antes de processar para garantir que todos os dados foram recebidos
-        setTimeout(() => {
-          if (insideFileCommand.current === commandId) {
-            insideFileCommand.current = null;
-            console.log(`[WEBREPL] Processing file command ${commandId} with buffer length:`, allMessages.current.length);
-            
-            // Processa comando de arquivo
-            fileCommands.processMessage(allMessages.current);
-            
-            // Limpa buffer após processamento
-            allMessages.current = '';
-            pendingTerminalData.current = '';
-          }
-        }, 100); // 100ms para aguardar dados adicionais
-        
-        return; // Não mostra nada no terminal
+        return; // Não mostra nada no terminal (tanto para válidos quanto órfãos)
       }
       
       // Se estamos dentro de um comando de arquivo, não mostra no terminal
@@ -218,13 +224,14 @@ export const useWebRepl = (url: string | null, password?: string) => {
         return;
       }
       
-      // Verifica se o buffer pendente contém início de comando de arquivo
+      // Verifica se o buffer pendente contém marcadores de comando de arquivo
       // Filtragem específica para evitar bloqueio de mensagens [SYSTEM]
       if (pendingTerminalData.current.includes('print("__START_') || 
+          pendingTerminalData.current.includes('__END_') ||
           pendingTerminalData.current.includes('exec("import os') ||
           pendingTerminalData.current.includes('exec("import uos') ||
           pendingTerminalData.current.includes('exec("with open(')) {
-        // Possível início de comando de arquivo, não mostra ainda
+        // Possível marcador de comando de arquivo, não mostra ainda
         return;
       }
       

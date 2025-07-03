@@ -37,8 +37,20 @@ const ReplManager: React.FC<ReplManagerProps> = ({ onEdit }) => {
     );
   }
 
+  const getGridColumns = () => {
+    const connectionCount = state.connections.length;
+    
+    if (connectionCount === 1) {
+      return "grid-cols-1";
+    } else if (connectionCount === 2) {
+      return "grid-cols-1 lg:grid-cols-2";
+    } else {
+      return "grid-cols-1 md:grid-cols-2 lg:grid-cols-3";
+    }
+  };
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className={`grid ${getGridColumns()} gap-4 lg:gap-6`}>
       {state.connections.map(conn => (
         <ReplConnectionCard
           key={conn.id}

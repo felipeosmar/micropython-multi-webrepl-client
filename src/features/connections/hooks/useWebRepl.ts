@@ -219,7 +219,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
       }
       
       // Verifica se o buffer pendente contém início de comando de arquivo
-      if (pendingTerminalData.current.includes('print("__START_') || 
+      if (pendingTerminalData.current.includes('__START_') || 
+          pendingTerminalData.current.includes('print("__START_') || 
           pendingTerminalData.current.includes('exec("import os') ||
           pendingTerminalData.current.includes('exec("import uos') ||
           pendingTerminalData.current.includes('exec("with open(')) {

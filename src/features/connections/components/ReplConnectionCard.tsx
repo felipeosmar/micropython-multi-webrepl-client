@@ -350,6 +350,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
             <SystemDashboard
               monitoringData={monitoringData}
               onSendCommand={onCommand}
+              isConnected={isConnected}
             />
           </div>
         )}

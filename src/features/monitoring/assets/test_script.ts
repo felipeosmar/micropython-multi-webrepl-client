@@ -1,28 +1,23 @@
 export const testMonitoringScript = `
 try:
-    import json
     import time
     
-    # Test data to verify monitoring is working
-    test_data = {
-        'memory': {'free': 123456, 'allocated': 78910},
-        'freq': 240000000,
-        'timestamp': time.time()
-    }
-    
-    print("__MONITOR_DATA__" + json.dumps(test_data))
+    # Test system metrics with manual JSON construction
+    timestamp = time.time()
+    test_system = '{"memory":{"free":123456,"allocated":78910},"freq":240000000,"timestamp":' + str(timestamp) + '}'
+    print("__MONITOR_DATA__" + test_system)
     
     # Test GPIO data
-    gpio_test = {'pin_2': 1, 'pin_4': 0, 'pin_5': 1}
-    print("__GPIO_STATE__" + json.dumps(gpio_test))
+    test_gpio = '{"pin_2":1,"pin_4":0,"pin_5":1,"pin_16":0,"pin_17":1}'
+    print("__GPIO_STATE__" + test_gpio)
     
     # Test WiFi data
-    wifi_test = [{'ssid': 'TestNetwork', 'rssi': -45, 'channel': 6, 'security': 'WPA2-PSK'}]
-    print("__WIFI_SCAN__" + json.dumps(wifi_test))
+    test_wifi = '[{"ssid":"TestNetwork","rssi":-45,"channel":6,"security":"WPA2-PSK"},{"ssid":"TestNetwork2","rssi":-67,"channel":11,"security":"Open"}]'
+    print("__WIFI_SCAN__" + test_wifi)
     
     # Test I2C data
-    i2c_test = [0x3C, 0x68]
-    print("__I2C_DEVICES__" + json.dumps(i2c_test))
+    test_i2c = '[60,104]'
+    print("__I2C_DEVICES__" + test_i2c)
     
 except Exception as e:
     print("Test error: " + str(e))

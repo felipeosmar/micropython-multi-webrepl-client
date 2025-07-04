@@ -173,19 +173,23 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
+      // Sempre acumula mensagens em buffer para comandos de arquivo
+      allMessages.current += data;
+      
       // Detecta se é conteúdo de arquivo (string longa começando com aspas)
       if (/^'.*/.test(data.trim()) && data.length > 50) {
-        // É conteúdo de arquivo, não mostra no terminal
+        // É conteúdo de arquivo, só processa comandos de arquivo
+        fileCommands.processMessage(allMessages.current);
         return;
       }
       
-      // Filtra comandos de arquivo para não aparecer no terminal
+      // Verifica se contém marcadores de comando de arquivo
       if (data.includes('__START_') || data.includes('__END_') ||
           data.includes('exec("import os') ||
           data.includes('exec("import uos') ||
           data.includes('exec("with open(')) {
-        // Processa comandos de arquivo
-        fileCommands.processMessage(data);
+        // Processa comandos de arquivo com buffer acumulado
+        fileCommands.processMessage(allMessages.current);
         return;
       }
       
@@ -250,6 +254,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       ws.current = null;
       
       // Cleanup on component unmount
+      allMessages.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
@@ -273,6 +278,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendFileCommand);
+  
+  // Buffer para acumular mensagens de arquivo
+  const allMessages = useRef<string>('');
 
   return { 
     status, 

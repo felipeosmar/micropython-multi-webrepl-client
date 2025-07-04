@@ -4,6 +4,9 @@ import { useWebRepl } from '../hooks/useWebRepl';
 import { useSerial } from '../hooks/useSerial';
 import { Terminal } from '@/components/terminal';
 import { FileManagerPanel } from '@/features/file-manager/components';
+import { SystemDashboard } from '@/features/monitoring/components';
+import { useMonitoringData } from '@/features/monitoring/hooks';
+import { ParsedMonitoringMessage } from '@/features/monitoring/types';
 import { PencilIcon, TrashIcon, WifiIcon, WifiOffIcon, RefreshIcon, FolderIcon } from '@/components/icons';
 
 const getSerialPortName = (port: SerialPort): string => {
@@ -76,8 +79,32 @@ const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onR
 const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
   const { status, lines, sendData, sendCommand, reconnect, fileCommands } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
   const [password, setPassword] = useState('');
+  const { 
+    monitoringData, 
+    updateSystemMetrics, 
+    updateGPIOState, 
+    updateWiFiNetworks, 
+    updateI2CDevices 
+  } = useMonitoringData();
 
   const handleCommand = (cmd: string) => sendCommand(cmd);
+
+  const handleMonitoringData = (data: ParsedMonitoringMessage) => {
+    switch (data.type) {
+      case 'MONITOR_DATA':
+        updateSystemMetrics(data.data);
+        break;
+      case 'GPIO_STATE':
+        updateGPIOState(data.data);
+        break;
+      case 'WIFI_SCAN':
+        updateWiFiNetworks(data.data);
+        break;
+      case 'I2C_DEVICES':
+        updateI2CDevices(data.data);
+        break;
+    }
+  };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +124,8 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
       sendData={sendData}
       sendCommand={sendCommand}
       fileCommands={fileCommands}
+      monitoringData={monitoringData}
+      onMonitoringData={handleMonitoringData}
     >
       {status === ReplStatus.PASSWORD && (
         <form onSubmit={handlePasswordSubmit} className="p-2 border-t border-gray-700 bg-gray-900/50">
@@ -123,8 +152,32 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
     connection.autoScroll,
     connection.showTimestamp
   );
+  const { 
+    monitoringData, 
+    updateSystemMetrics, 
+    updateGPIOState, 
+    updateWiFiNetworks, 
+    updateI2CDevices 
+  } = useMonitoringData();
 
   const handleCommand = (cmd: string) => sendCommand(cmd);
+
+  const handleMonitoringData = (data: ParsedMonitoringMessage) => {
+    switch (data.type) {
+      case 'MONITOR_DATA':
+        updateSystemMetrics(data.data);
+        break;
+      case 'GPIO_STATE':
+        updateGPIOState(data.data);
+        break;
+      case 'WIFI_SCAN':
+        updateWiFiNetworks(data.data);
+        break;
+      case 'I2C_DEVICES':
+        updateI2CDevices(data.data);
+        break;
+    }
+  };
 
   return (
     <CardLayout
@@ -139,6 +192,8 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
       onClear={clearOutput}
       sendCommand={sendCommand}
       fileCommands={fileCommands}
+      monitoringData={monitoringData}
+      onMonitoringData={handleMonitoringData}
     >
       {/* O botão de conexão foi removido, a conexão agora é automática */}
     </CardLayout>
@@ -159,6 +214,8 @@ interface CardLayoutProps {
   sendData?: (data: string) => Promise<void> | void;
   sendCommand?: (command: string) => void;
   fileCommands?: any;
+  monitoringData?: any;
+  onMonitoringData?: (data: ParsedMonitoringMessage) => void;
 }
 
 // Layout reutilizável do cartão
@@ -175,9 +232,11 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   onClear,
   sendData,
   sendCommand,
-  fileCommands
+  fileCommands,
+  monitoringData,
+  onMonitoringData
 }) => {
-  const [activeTab, setActiveTab] = useState<'terminal' | 'files'>('terminal');
+  const [activeTab, setActiveTab] = useState<'terminal' | 'files' | 'monitoring'>('terminal');
   const isConnected = status === ReplStatus.CONNECTED;
   const isWebRepl = connection.connectionType === 'webrepl';
 
@@ -236,21 +295,61 @@ const CardLayout: React.FC<CardLayoutProps> = ({
             <FolderIcon className="w-4 h-4" />
             <span>Arquivos</span>
           </button>
+          <button
+            onClick={() => setActiveTab('monitoring')}
+            className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'monitoring'
+                ? 'bg-gray-700 text-cyan-400 border-b-2 border-cyan-400'
+                : 'text-gray-400 hover:text-gray-300'
+            }`}
+            disabled={!isConnected}
+          >
+            <span>📊</span>
+            <span>Monitor</span>
+          </button>
         </div>
 
       {/* Conteúdo */}
-      <div className="flex-grow overflow-hidden flex">
-        {/* Terminal - sempre visível */}
-        <div className={`${activeTab === 'files' ? 'flex-1' : 'w-full'} p-1`}>
-          <Terminal lines={lines} onCommand={onCommand} autoScroll={autoScroll} onClear={onClear} />
-        </div>
+      <div className="flex-grow overflow-hidden">
+        {activeTab === 'terminal' && (
+          <div className="p-1 h-full">
+            <Terminal 
+              lines={lines} 
+              onCommand={onCommand} 
+              autoScroll={autoScroll} 
+              onClear={onClear}
+              onMonitoringData={onMonitoringData}
+            />
+          </div>
+        )}
         
-        {/* File Manager Sidebar - visível quando aba de arquivos está ativa */}
-        {activeTab === 'files' && fileCommands && (
-          <div className="w-80 flex-shrink-0">
-            <FileManagerPanel
-              fileCommands={fileCommands}
-              isConnected={isConnected}
+        {activeTab === 'files' && (
+          <div className="flex h-full">
+            <div className="flex-1 p-1">
+              <Terminal 
+                lines={lines} 
+                onCommand={onCommand} 
+                autoScroll={autoScroll} 
+                onClear={onClear}
+                onMonitoringData={onMonitoringData}
+              />
+            </div>
+            {fileCommands && (
+              <div className="w-80 flex-shrink-0">
+                <FileManagerPanel
+                  fileCommands={fileCommands}
+                  isConnected={isConnected}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'monitoring' && (
+          <div className="p-4 h-full overflow-y-auto">
+            <SystemDashboard
+              monitoringData={monitoringData}
+              onSendCommand={onCommand}
             />
           </div>
         )}

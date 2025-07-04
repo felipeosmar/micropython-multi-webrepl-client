@@ -21,7 +21,10 @@
       "Bash(pkill:*)",
       "Bash(npm run test:run:*)",
       "Bash(rg:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(claude doctor)",
+      "Bash(node:*)",
+      "Bash(npm:*)"
     ],
     "deny": []
   }

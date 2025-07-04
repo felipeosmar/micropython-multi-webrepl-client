@@ -52,8 +52,6 @@ Esta é uma aplicação React + TypeScript + Vite que cria um cliente web para g
 
 ### Configuração de Ambiente
 
-A configuração do Vite inclui tratamento de variável de ambiente para `GEMINI_API_KEY`, sugerindo integração com a API do Google Gemini (embora não esteja sendo usada atualmente).
-
 ## Detalhes de Implementação Importantes
 
 ### Conexão Serial (useSerial.ts)

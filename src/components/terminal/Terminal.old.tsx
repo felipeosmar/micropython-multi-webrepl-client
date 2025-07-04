@@ -28,7 +28,6 @@ interface TerminalProps {
  * - Autoscroll opcional
  * - Botão de limpeza
  * - Foco automático no campo de entrada
- * - Parsing de dados de monitoramento
  */
 const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true, onClear, onMonitoringData }) => {
   const [command, setCommand] = useState('');
@@ -94,21 +93,9 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
     }
   }, [history, historyIndex]);
 
-  // Process lines for monitoring data and render
+  // Memoize rendered lines for performance
   const renderedLines = useMemo(() => {
     return lines.map((line, index) => {
-      // Check if line contains monitoring data
-      if (isMonitoringData(line)) {
-        const parsedData = parseMonitoringData(line);
-        if (parsedData && onMonitoringData) {
-          onMonitoringData(parsedData);
-        }
-        // Clean the line for display (remove monitoring markers)
-        const cleanedLine = cleanLine(line);
-        if (!cleanedLine) return null; // Don't render empty lines
-        line = cleanedLine;
-      }
-
       const isError = line.includes('[SYSTEM] Error:');
       const isSystem = line.startsWith('[SYSTEM]');
       const style = isError
@@ -117,10 +104,10 @@ const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true
         ? 'text-yellow-400'
         : '';
       return (
-        <pre key={index} className={`whitespace-pre-wrap break-words leading-tight ${style}`}>{line}</pre>
+         <pre key={index} className={`whitespace-pre-wrap break-words leading-tight ${style}`}>{line}</pre>
       );
-    }).filter(Boolean);
-  }, [lines, isMonitoringData, parseMonitoringData, cleanLine, onMonitoringData]);
+    });
+  }, [lines]);
 
   // Focus input on container click
   const handleContainerClick = useCallback(() => {

@@ -5,7 +5,8 @@ import { useCallback, useRef } from 'react';
  * Usa comandos Python normais sem raw-paste mode
  */
 export const useSimpleFileCommands = (
-  sendCommand: (command: string) => void
+  sendCommand: (command: string) => void,
+  isConnected?: boolean
 ) => {
   const commandQueue = useRef<{
     resolve: (result: any) => void;
@@ -132,6 +133,12 @@ export const useSimpleFileCommands = (
     command: string,
     timeoutMs: number = 3000
   ): Promise<any> => {
+    // Verifica se há conexão antes de executar comando
+    if (isConnected === false) {
+      console.log(`[FILE CMD] Skipping command - not connected: ${command.substring(0, 50)}...`);
+      throw new Error('Not connected - cannot execute file commands');
+    }
+    
     // Limita tempo de espera na fila para evitar travar para sempre
     const maxWaitTime = 5000; // 5 segundos máximo esperando na fila
     const startWaitTime = Date.now();
@@ -196,7 +203,7 @@ export const useSimpleFileCommands = (
         reject(new Error(`Failed to send command: ${error}`));
       }
     });
-  }, [sendCommand]);
+  }, [sendCommand, isConnected]);
 
   /**
    * Lista arquivos usando comando Python simples com módulo 'os' moderno

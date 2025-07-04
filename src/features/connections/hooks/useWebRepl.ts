@@ -285,7 +285,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
   }, [sendData]);
 
   // Integração com comandos de arquivo
-  const fileCommands = useSimpleFileCommands(sendFileCommand);
+  const isConnected = status === ReplStatus.CONNECTED;
+  const fileCommands = useSimpleFileCommands(sendFileCommand, isConnected);
   
   // Buffer para acumular mensagens de arquivo
   const allMessages = useRef<string>('');

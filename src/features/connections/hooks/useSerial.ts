@@ -427,7 +427,8 @@ export const useSerial = (
   }, [sendData]);
 
   // Para Serial, usa o sendCommand normal já que não tem o problema de reset
-  const fileCommands = useSimpleFileCommands(sendCommand);
+  const isConnected = status === ReplStatus.CONNECTED;
+  const fileCommands = useSimpleFileCommands(sendCommand, isConnected);
 
   // Processar mensagens para comandos de arquivo apenas quando necessário
   useEffect(() => {

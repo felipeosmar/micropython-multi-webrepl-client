@@ -405,6 +405,15 @@ export const useSerial = (
     setLines([]);
   }, []);
 
+  // Função especial para comandos de monitoramento que não interfere com a fila de comandos
+  const sendDirectCommand = useCallback((command: string) => {
+    if (command.trim() === '') return;
+    
+    console.log(`[SERIAL DIRECT] Sending direct command: ${command.substring(0, 50)}...`);
+    // Para comandos de monitoramento, usa carriage return (padrão para MicroPython)
+    sendData(command + '\r');
+  }, [sendData]);
+
   // Para Serial, usa o sendCommand normal já que não tem o problema de reset
   const fileCommands = useSimpleFileCommands(sendCommand);
 
@@ -420,5 +429,5 @@ export const useSerial = (
     }
   }, [lines, fileCommands]);
   
-  return { status, lines, sendCommand, connect, disconnect, checkPortAvailability, clearOutput, autoScroll, fileCommands };
+  return { status, lines, sendCommand, sendDirectCommand, connect, disconnect, checkPortAvailability, clearOutput, autoScroll, fileCommands };
 };

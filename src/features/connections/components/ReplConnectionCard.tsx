@@ -77,7 +77,7 @@ const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica do WebREPL
 const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendData, sendCommand, reconnect, fileCommands } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
+  const { status, lines, sendData, sendCommand, sendDirectCommand, reconnect, fileCommands } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
   const [password, setPassword] = useState('');
   const { 
     monitoringData, 
@@ -123,6 +123,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
       onRemove={onRemove}
       sendData={sendData}
       sendCommand={sendCommand}
+      sendDirectCommand={sendDirectCommand}
       fileCommands={fileCommands}
       monitoringData={monitoringData}
       onMonitoringData={handleMonitoringData}
@@ -145,7 +146,7 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, connect, clearOutput, autoScroll, fileCommands } = useSerial(
+  const { status, lines, sendCommand, sendDirectCommand, connect, clearOutput, autoScroll, fileCommands } = useSerial(
     connection.port, 
     connection.baudRate,
     connection.lineEnding,
@@ -191,6 +192,7 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
       autoScroll={autoScroll}
       onClear={clearOutput}
       sendCommand={sendCommand}
+      sendDirectCommand={sendDirectCommand}
       fileCommands={fileCommands}
       monitoringData={monitoringData}
       onMonitoringData={handleMonitoringData}
@@ -213,6 +215,7 @@ interface CardLayoutProps {
   onClear?: () => void;
   sendData?: (data: string) => Promise<void> | void;
   sendCommand?: (command: string) => void;
+  sendDirectCommand?: (command: string) => void;
   fileCommands?: any;
   monitoringData?: any;
   onMonitoringData?: (data: ParsedMonitoringMessage) => void;
@@ -232,6 +235,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   onClear,
   sendData,
   sendCommand,
+  sendDirectCommand,
   fileCommands,
   monitoringData,
   onMonitoringData
@@ -349,7 +353,7 @@ const CardLayout: React.FC<CardLayoutProps> = ({
           <div className="p-4 h-full overflow-y-auto">
             <SystemDashboard
               monitoringData={monitoringData}
-              onSendCommand={onCommand}
+              onSendCommand={sendDirectCommand || onCommand}
               isConnected={isConnected}
             />
           </div>

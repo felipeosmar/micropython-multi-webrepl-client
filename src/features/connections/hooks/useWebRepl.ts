@@ -330,6 +330,15 @@ export const useWebRepl = (url: string | null, password?: string) => {
     sendData(command + '\r');
   }, [sendData]);
 
+  // Função especial para comandos de monitoramento que não interfere com a fila de comandos
+  const sendDirectCommand = useCallback((command: string) => {
+    if (command.trim() === '') return;
+    
+    console.log(`[WEBREPL DIRECT] Sending direct command: ${command.substring(0, 50)}...`);
+    // Para comandos de monitoramento, envia diretamente sem Ctrl+C e sem interferir na fila
+    sendData(command + '\r');
+  }, [sendData]);
+
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendFileCommand);
 
@@ -344,6 +353,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
     lines, 
     sendData, 
     sendCommand, 
+    sendDirectCommand,
     reconnect,
     fileCommands
   };

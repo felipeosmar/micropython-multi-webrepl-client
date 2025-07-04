@@ -24,7 +24,8 @@
       "Bash(git checkout:*)",
       "Bash(claude doctor)",
       "Bash(node:*)",
-      "Bash(npm:*)"
+      "Bash(npm:*)",
+      "Bash(grep:*)"
     ],
     "deny": []
   }

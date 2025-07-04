@@ -18,7 +18,8 @@ export const useAutoMonitoring = (
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const executeScript = useCallback((script: string) => {
-    if (isConnected) {
+    if (isConnected && onSendCommand) {
+      console.log(`[AUTO MONITORING] Executing script: ${script.substring(0, 50)}...`);
       onSendCommand(`exec("""${script}""")`);
     }
   }, [isConnected, onSendCommand]);

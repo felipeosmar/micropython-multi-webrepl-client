@@ -220,6 +220,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
       console.error('WebSocket Error:', error);
       appendLine('[SYSTEM] A connection error occurred.');
       setStatus(ReplStatus.ERROR);
+      // Limpa fila de comandos quando há erro de conexão
+      if (fileCommands.clearQueue) {
+        fileCommands.clearQueue();
+      }
     };
 
     const onClose = () => {
@@ -231,6 +235,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
                 if (prevStatus === ReplStatus.CONNECTED || prevStatus === ReplStatus.CONNECTING) {
                   scheduleRetry();
                 }
+            }
+            // Limpa fila de comandos quando conexão é fechada
+            if (fileCommands.clearQueue) {
+              fileCommands.clearQueue();
             }
             return ReplStatus.DISCONNECTED;
         });

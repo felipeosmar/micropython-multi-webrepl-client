@@ -145,6 +145,10 @@ export const useSerial = (
     if (status !== ReplStatus.DISCONNECTED && !connecting.current) {
       setStatus(ReplStatus.DISCONNECTED);
       appendLine('[SYSTEM] Disconnected.');
+      // Limpa fila de comandos quando desconecta
+      if (fileCommands.clearQueue) {
+        fileCommands.clearQueue();
+      }
     }
   }, [appendLine, status]);
 
@@ -174,6 +178,10 @@ export const useSerial = (
       if (keepReading.current) {
         setStatus(ReplStatus.DISCONNECTED);
         appendLine('[SYSTEM] Disconnected from serial port.');
+        // Limpa fila de comandos quando há erro de leitura
+        if (fileCommands.clearQueue) {
+          fileCommands.clearQueue();
+        }
       }
     }
   }, [appendLine]);
@@ -265,6 +273,10 @@ export const useSerial = (
       connecting.current = false;
       appendLine(`[SYSTEM] Connection Error: ${error.message}`);
       setStatus(ReplStatus.ERROR);
+      // Limpa fila de comandos quando há erro de conexão
+      if (fileCommands.clearQueue) {
+        fileCommands.clearQueue();
+      }
       // Clean up resources on error
       if (reader.current) {
         try {

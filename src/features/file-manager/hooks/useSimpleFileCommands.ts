@@ -132,8 +132,24 @@ export const useSimpleFileCommands = (
     command: string,
     timeoutMs: number = 3000
   ): Promise<any> => {
+    // Limita tempo de espera na fila para evitar travar para sempre
+    const maxWaitTime = 5000; // 5 segundos máximo esperando na fila
+    const startWaitTime = Date.now();
+    
     // Previne execução simultânea de comandos - aguarda se há comando em execução
     while (commandQueue.current.length > 0) {
+      // Verifica se já esperou tempo demais
+      if (Date.now() - startWaitTime > maxWaitTime) {
+        console.log(`[FILE CMD] Queue wait timeout, clearing stuck commands...`);
+        // Limpa comandos presos na fila
+        commandQueue.current.forEach(cmd => {
+          clearTimeout(cmd.timeout);
+          cmd.reject(new Error('Queue timeout - connection may be lost'));
+        });
+        commandQueue.current = [];
+        break;
+      }
+      
       console.log(`[FILE CMD] Command queue busy, waiting...`);
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -163,12 +179,22 @@ export const useSimpleFileCommands = (
         isActive: true
       });
 
-      // Envolve comando com marcadores únicos - linha única
-      const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+      try {
+        // Envolve comando com marcadores únicos - linha única
+        const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
 
-      // Envia comando normalmente pelo terminal
-      console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
-      sendCommand(wrappedCommand);
+        // Envia comando normalmente pelo terminal
+        console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
+        sendCommand(wrappedCommand);
+      } catch (error) {
+        // Se falhar ao enviar comando, remove da fila e rejeita
+        const index = commandQueue.current.findIndex(cmd => cmd.commandId === commandId);
+        if (index !== -1) {
+          clearTimeout(commandQueue.current[index].timeout);
+          commandQueue.current.splice(index, 1);
+        }
+        reject(new Error(`Failed to send command: ${error}`));
+      }
     });
   }, [sendCommand]);
 
@@ -352,6 +378,19 @@ export const useSimpleFileCommands = (
     }
   }, [executeCommand]);
 
+  /**
+   * Limpa a fila de comandos quando a conexão é perdida
+   */
+  const clearQueue = useCallback(() => {
+    console.log(`[FILE CMD] Clearing command queue (${commandQueue.current.length} commands)`);
+    commandQueue.current.forEach(cmd => {
+      clearTimeout(cmd.timeout);
+      cmd.reject(new Error('Connection lost - command cancelled'));
+    });
+    commandQueue.current = [];
+    lastProcessedLength.current = 0;
+  }, []);
+
   return {
     processMessage,
     executeCommand,
@@ -360,6 +399,7 @@ export const useSimpleFileCommands = (
     writeFile,
     createDirectory,
     deleteFile,
-    deleteDirectory
+    deleteDirectory,
+    clearQueue
   };
 };

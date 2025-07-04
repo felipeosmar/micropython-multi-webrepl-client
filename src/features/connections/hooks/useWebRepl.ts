@@ -173,88 +173,27 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
-      // Sempre acumula todas as mensagens para processamento de comandos de arquivo
-      allMessages.current += data;
-      
-      // Adiciona dados ao buffer pendente
-      pendingTerminalData.current += data;
-      
-      // Detecta início de comando de arquivo no buffer completo
-      const startMatch = allMessages.current.match(/__START_(\w+)__/);
-      if (startMatch && !insideFileCommand.current) {
-        insideFileCommand.current = startMatch[1];
-        console.log(`[WEBREPL] Starting file command ${insideFileCommand.current}`);
-        // Limpa o buffer pendente quando detecta início de comando de arquivo
-        pendingTerminalData.current = '';
-      }
-      
-      // Detecta fim de comando de arquivo no buffer completo
-      const endMatch = allMessages.current.match(/__END_(\w+)__/);
-      if (endMatch) {
-        const endCommandId = endMatch[1];
-        
-        if (insideFileCommand.current === endCommandId) {
-          // Marcador END corresponde ao comando atual
-          console.log(`[WEBREPL] File command ${endCommandId} END marker detected, waiting for data...`);
-          
-          // Aguarda um tempo antes de processar para garantir que todos os dados foram recebidos
-          setTimeout(() => {
-            if (insideFileCommand.current === endCommandId) {
-              insideFileCommand.current = null;
-              console.log(`[WEBREPL] Processing file command ${endCommandId} with buffer length:`, allMessages.current.length);
-              
-              // Processa comando de arquivo
-              fileCommands.processMessage(allMessages.current);
-              
-              // Limpa buffer após processamento
-              allMessages.current = '';
-              pendingTerminalData.current = '';
-            }
-          }, 100); // 100ms para aguardar dados adicionais
-        } else {
-          // Marcador END órfão de comando anterior - filtrar silenciosamente
-          console.log(`[WEBREPL] Orphan END marker detected: ${endCommandId}, current command: ${insideFileCommand.current}`);
-        }
-        
-        return; // Não mostra nada no terminal (tanto para válidos quanto órfãos)
-      }
-      
-      // Se estamos dentro de um comando de arquivo, não mostra no terminal
-      if (insideFileCommand.current !== null) {
-        return;
-      }
-      
-      // Verifica se o buffer pendente contém marcadores de comando de arquivo
-      // Filtragem específica para evitar bloqueio de mensagens [SYSTEM]
-      if (pendingTerminalData.current.includes('print("__START_') || 
-          pendingTerminalData.current.includes('__END_') ||
-          pendingTerminalData.current.includes('exec("import os') ||
-          pendingTerminalData.current.includes('exec("import uos') ||
-          pendingTerminalData.current.includes('exec("with open(')) {
-        // Possível marcador de comando de arquivo, não mostra ainda
-        return;
-      }
-      
-      // Verifica se é conteúdo de arquivo (string longa começando com aspas)
-      if (/^'.*/.test(pendingTerminalData.current.trim()) && pendingTerminalData.current.length > 50) {
+      // Detecta se é conteúdo de arquivo (string longa começando com aspas)
+      if (/^'.*/.test(data.trim()) && data.length > 50) {
         // É conteúdo de arquivo, não mostra no terminal
-        pendingTerminalData.current = '';
         return;
       }
       
-      // Se chegou aqui, são dados normais do terminal
-      // Agenda timeout para mostrar dados pendentes (permite acumular fragmentos)
-      if (pendingTimeout.current) {
-        clearTimeout(pendingTimeout.current);
+      // Filtra comandos de arquivo para não aparecer no terminal
+      if (data.includes('__START_') || data.includes('__END_') ||
+          data.includes('exec("import os') ||
+          data.includes('exec("import uos') ||
+          data.includes('exec("with open(')) {
+        // Processa comandos de arquivo
+        fileCommands.processMessage(data);
+        return;
       }
       
-      pendingTimeout.current = setTimeout(() => {
-        if (pendingTerminalData.current.trim() && insideFileCommand.current === null) {
-          appendLine(pendingTerminalData.current);
-          pendingTerminalData.current = '';
-        }
-      }, 50); // 50ms de delay para acumular fragmentos
-       setStatus(prevStatus => {
+      // Dados normais do terminal
+      appendLine(data);
+      
+      // Detecta estado da conexão
+      setStatus(prevStatus => {
         if (data.includes('Password:')) {
             if (prevStatus === ReplStatus.PASSWORD && passwordSent.current) {
                 appendLine('[SYSTEM] Saved password was incorrect. Please enter manually.');
@@ -310,14 +249,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       }
       ws.current = null;
       
-      // Limpa buffer de mensagens e flag de comando
-      insideFileCommand.current = null;
-      pendingTerminalData.current = '';
-      if (pendingTimeout.current) {
-        clearTimeout(pendingTimeout.current);
-        pendingTimeout.current = null;
-      }
-      // Não limpa allMessages aqui para permitir processamento de comandos pendentes
+      // Cleanup on component unmount
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
@@ -341,12 +273,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
   // Integração com comandos de arquivo
   const fileCommands = useSimpleFileCommands(sendFileCommand);
-
-  // Estado separado para armazenar todas as mensagens (incluindo comandos de arquivo)
-  const allMessages = useRef<string>('');
-  const insideFileCommand = useRef<string | null>(null); // Armazena o ID do comando em execução
-  const pendingTerminalData = useRef<string>(''); // Buffer para dados que podem ser comandos de arquivo
-  const pendingTimeout = useRef<NodeJS.Timeout | null>(null);
 
   return { 
     status, 

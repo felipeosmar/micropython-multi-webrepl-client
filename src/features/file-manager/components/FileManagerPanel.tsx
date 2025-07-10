@@ -49,7 +49,10 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     console.log('[FILE MANAGER] Effect triggered - isConnected:', isConnected, 'items:', items.length, 'loading:', loading);
     if (isConnected && items.length === 0 && !loading) {
       console.log('[FILE MANAGER] Loading initial file list...');
-      listFiles('/');
+      // Adiciona um pequeno delay para garantir que a conexão esteja pronta
+      setTimeout(() => {
+        listFiles('/');
+      }, 1000);
     }
   }, [isConnected]); // Removido listFiles da dependência para evitar loops
 
@@ -198,12 +201,37 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
             </button>
             
             <button
-              onClick={() => listFiles(currentPath)}
+              onClick={() => {
+                console.log('[FILE MANAGER] Manual refresh clicked');
+                listFiles(currentPath);
+              }}
               disabled={loading}
               className="p-2 bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors disabled:opacity-50"
               title="Atualizar"
             >
               <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            
+            {/* Botão de teste temporário */}
+            <button
+              onClick={async () => {
+                console.log('[FILE MANAGER TEST] Testing direct command');
+                if (fileCommands && fileCommands.executeCommand) {
+                  try {
+                    const testCommand = `exec("import os\\nprint('Files in root:')\\nfor f in os.listdir('/'):\\n    print('-', f)")`;
+                    const result = await fileCommands.executeCommand(testCommand, 5000);
+                    console.log('[FILE MANAGER TEST] Direct result:', result);
+                    alert(`Resultado do teste:\n${result}`);
+                  } catch (error) {
+                    console.error('[FILE MANAGER TEST] Error:', error);
+                    alert(`Erro no teste: ${error}`);
+                  }
+                }
+              }}
+              className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-xs ml-1"
+              title="Teste Direto"
+            >
+              T
             </button>
             
           </div>
@@ -263,6 +291,13 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
           {error}
         </div>
       )}
+      
+      {/* Debug Info */}
+      <div className="mx-3 mb-2 p-2 bg-gray-700 rounded text-xs text-gray-300">
+        <div>Status: {loading ? 'Carregando...' : 'Pronto'}</div>
+        <div>Arquivos: {items.length}</div>
+        <div>Caminho: {currentPath}</div>
+      </div>
 
       {/* File List */}
       <div className="flex-1 overflow-hidden">

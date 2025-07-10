@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
-import { useSimpleFileCommands } from '../../file-manager/hooks';
 import { SYSTEM_MESSAGES } from '../../../shared/constants/system.messages';
 
 /**
@@ -27,11 +26,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const maxRetries = 3;
   const retryDelay = useRef(1000); // Start with 1 second
   const isAutoRetrying = useRef(false); // Flag para controlar se está em retry automático
-  
-  // Buffer para acumular mensagens de arquivo - DEVE ser declarado no início
-  const allMessages = useRef<string>('');
-  // Callback para processar mensagens de arquivo
-  const fileMessageCallback = useRef<((message: string) => void) | null>(null);
 
 
   /**
@@ -191,52 +185,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       const data = event.data as string;
       
-      // Sempre acumula mensagens em buffer para comandos de arquivo
-      allMessages.current += data;
-      
-      // Detecta se é conteúdo de arquivo (string longa começando com aspas)
-      if (/^'.*/.test(data.trim()) && data.length > 50) {
-        // É conteúdo de arquivo, só processa comandos de arquivo
-        if (fileMessageCallback.current) {
-          fileMessageCallback.current(allMessages.current);
-        }
-        return;
-      }
-      
-      // Verifica se contém marcadores de comando de arquivo ou comandos de listagem
-      if (data.includes('__START_') || data.includes('__END_') ||
-          data.includes('exec("import os') ||
-          data.includes('exec("import uos') ||
-          data.includes('exec("with open(') ||
-          allMessages.current.includes('__START_') && allMessages.current.includes('__END_')) {
-        // Processa comandos de arquivo com buffer acumulado
-        if (fileMessageCallback.current) {
-          console.log('[WEBREPL] Processing file command message');
-          fileMessageCallback.current(allMessages.current);
-        } else {
-          console.log('[WEBREPL] No file message callback available');
-        }
-        
-        // Limpa o buffer se o comando foi completado
-        if (allMessages.current.includes('__END_')) {
-          const endMarkerMatch = allMessages.current.match(/__END_(\w+)__/);
-          if (endMarkerMatch) {
-            const commandId = endMarkerMatch[1];
-            if (allMessages.current.includes(`__START_${commandId}__`)) {
-              // Comando completo processado, limpa o buffer
-              setTimeout(() => {
-                allMessages.current = '';
-              }, 100);
-            }
-          }
-        }
-        return;
-      }
-      
-      // Dados normais do terminal - não exibe comandos de arquivo
-      if (!data.includes('print("__START_') && !data.includes('exec("import')) {
-        appendLine(data);
-      }
+      // Dados normais do terminal
+      appendLine(data);
       
       // Detecta estado da conexão
       setStatus(prevStatus => {
@@ -266,10 +216,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
       console.error('WebSocket Error:', error);
       appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED);
       setStatus(ReplStatus.ERROR);
-      // Limpa fila de comandos quando há erro de conexão
-      if (fileCommands.clearQueue) {
-        fileCommands.clearQueue();
-      }
     };
 
     const onClose = () => {
@@ -283,10 +229,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
                     !isAutoRetrying.current) {
                   scheduleRetry();
                 }
-            }
-            // Limpa fila de comandos quando conexão é fechada
-            if (fileCommands.clearQueue) {
-              fileCommands.clearQueue();
             }
             return ReplStatus.DISCONNECTED;
         });
@@ -308,20 +250,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
         socket.close();
       }
       ws.current = null;
-      
-      // Cleanup on component unmount
-      allMessages.current = '';
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, appendLine, reconnectAttempt]);
-
-
-  // Função especial para comandos de arquivo que não usa reset automático
-  const sendFileCommand = useCallback((command: string) => {
-    console.log(`[WEBREPL FILE] Sending file command without reset`);
-    // Para comandos de arquivo, envia diretamente sem Ctrl+C
-    sendData(command + '\r');
-  }, [sendData]);
 
   // Função especial para comandos de monitoramento que não interfere com a fila de comandos
   const sendDirectCommand = useCallback((command: string) => {
@@ -332,24 +263,12 @@ export const useWebRepl = (url: string | null, password?: string) => {
     sendData(command + '\r');
   }, [sendData]);
 
-  // Integração com comandos de arquivo
-  const isConnected = status === ReplStatus.CONNECTED;
-  const fileCommands = useSimpleFileCommands(sendFileCommand, isConnected);
-  
-  // Registra o callback para processar mensagens
-  useEffect(() => {
-    if (fileCommands && fileCommands.processMessage) {
-      fileMessageCallback.current = fileCommands.processMessage;
-    }
-  }, [fileCommands]);
-
   return { 
     status, 
     lines, 
     sendData, 
     sendCommand, 
     sendDirectCommand,
-    reconnect,
-    fileCommands
+    reconnect
   };
 };

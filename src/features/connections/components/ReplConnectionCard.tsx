@@ -3,7 +3,6 @@ import { ReplConnection, ReplStatus } from '../types';
 import { useWebRepl } from '../hooks/useWebRepl';
 import { useSerial } from '../hooks/useSerial';
 import { Terminal } from '@/components/terminal';
-import { FileManagerPanel } from '@/features/file-manager/components';
 import { SystemDashboard } from '@/features/monitoring/components';
 import { useMonitoringData } from '@/features/monitoring/hooks';
 import { ParsedMonitoringMessage } from '@/features/monitoring/types';
@@ -77,7 +76,7 @@ const ReplConnectionCard: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica do WebREPL
 const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendData, sendCommand, sendDirectCommand, reconnect, fileCommands } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
+  const { status, lines, sendData, sendCommand, sendDirectCommand, reconnect } = useWebRepl(`ws://${connection.ip}:8266`, connection.password);
   const [password, setPassword] = useState('');
   const { 
     monitoringData, 
@@ -124,7 +123,6 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
       sendData={sendData}
       sendCommand={sendCommand}
       sendDirectCommand={sendDirectCommand}
-      fileCommands={fileCommands}
       monitoringData={monitoringData}
       onMonitoringData={handleMonitoringData}
     >
@@ -154,16 +152,6 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
     connection.showTimestamp
   );
   const { status, lines, sendCommand, sendDirectCommand, connect, clearOutput, autoScroll } = serialHook;
-  const fileCommands = {
-    executeCommand: serialHook.executeCommand,
-    listFiles: serialHook.listFiles,
-    readFile: serialHook.readFile,
-    writeFile: serialHook.writeFile,
-    createDirectory: serialHook.createDirectory,
-    deleteFile: serialHook.deleteFile,
-    deleteDirectory: serialHook.deleteDirectory,
-    processMessage: serialHook.processMessage
-  };
   const { 
     monitoringData, 
     updateSystemMetrics, 
@@ -204,7 +192,6 @@ const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRe
       onClear={clearOutput}
       sendCommand={sendCommand}
       sendDirectCommand={sendDirectCommand}
-      fileCommands={fileCommands}
       monitoringData={monitoringData}
       onMonitoringData={handleMonitoringData}
     >
@@ -227,7 +214,6 @@ interface CardLayoutProps {
   sendData?: (data: string) => Promise<void> | void;
   sendCommand?: (command: string) => void;
   sendDirectCommand?: (command: string) => void;
-  fileCommands?: any;
   monitoringData?: any;
   onMonitoringData?: (data: ParsedMonitoringMessage) => void;
 }
@@ -245,7 +231,6 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   autoScroll, 
   onClear,
   sendDirectCommand,
-  fileCommands,
   monitoringData,
   onMonitoringData
 }) => {
@@ -336,17 +321,14 @@ const CardLayout: React.FC<CardLayoutProps> = ({
         )}
         
         {activeTab === 'files' && (
-          <div className="h-full">
-            {fileCommands ? (
-              <FileManagerPanel
-                fileCommands={fileCommands}
-                isConnected={isConnected}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center bg-gray-900 text-gray-400">
-                <p>File commands não disponível</p>
-              </div>
-            )}
+          <div className="p-1 h-full">
+            <Terminal 
+              lines={lines} 
+              onCommand={onCommand} 
+              autoScroll={autoScroll} 
+              onClear={onClear}
+              onMonitoringData={onMonitoringData}
+            />
           </div>
         )}
 

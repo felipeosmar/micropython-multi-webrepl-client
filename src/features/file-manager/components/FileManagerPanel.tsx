@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useFileOperations } from '../hooks/useFileOperations';
 import FileList from './FileList';
 import FileUpload from './FileUpload';
+import FileEditor from './FileEditor';
 import { FolderPlusIcon, RefreshIcon } from '@/components/icons';
+import { FileSystemItem } from '@/shared/types';
 
 /**
  * Props do FileManagerPanel
@@ -29,6 +31,9 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
 }) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [selectedFile, setSelectedFile] = useState<FileSystemItem | null>(null);
+  const [fileContent, setFileContent] = useState('');
+  const [loadingFile, setLoadingFile] = useState(false);
 
   const {
     fileManagerState,
@@ -153,6 +158,56 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     }
   };
 
+  /**
+   * Abre um arquivo para edição
+   */
+  const handleOpenFile = async (file: FileSystemItem) => {
+    if (file.type !== 'file') return;
+    
+    setLoadingFile(true);
+    try {
+      if (fileCommands && fileCommands.readFile) {
+        const fullPath = file.path;
+        console.log(`[FILE MANAGER] Opening file: ${fullPath}`);
+        const content = await fileCommands.readFile(fullPath);
+        setFileContent(content);
+        setSelectedFile(file);
+      }
+    } catch (error) {
+      console.error('[FILE MANAGER] Error opening file:', error);
+      alert(`Erro ao abrir arquivo: ${error}`);
+    } finally {
+      setLoadingFile(false);
+    }
+  };
+
+  /**
+   * Salva o conteúdo do arquivo
+   */
+  const handleSaveFile = async (content: string) => {
+    if (!selectedFile || !fileCommands || !fileCommands.writeFile) return;
+    
+    const fullPath = selectedFile.path;
+    console.log(`[FILE MANAGER] Saving file: ${fullPath}`);
+    
+    const result = await fileCommands.writeFile(fullPath, content);
+    if (result === 'SUCCESS' || result.includes('SUCCESS')) {
+      setFileContent(content);
+      // Opcionalmente, recarrega a lista de arquivos para atualizar tamanhos
+      await listFiles(currentPath);
+    } else {
+      throw new Error(result);
+    }
+  };
+
+  /**
+   * Fecha o editor
+   */
+  const handleCloseEditor = () => {
+    setSelectedFile(null);
+    setFileContent('');
+  };
+
   // Redefine estado ao perder conexão
   useEffect(() => {
     if (!isConnected) {
@@ -170,9 +225,29 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
   }
 
   return (
-    <div className="h-full flex flex-col bg-gray-900 border-l border-gray-700">
-      {/* Header compacto */}
-      <div className="p-3 border-b border-gray-700">
+    <div className="h-full flex">
+      {/* Editor de arquivo (se houver arquivo selecionado) */}
+      {selectedFile ? (
+        <div className="flex-1">
+          <FileEditor
+            selectedFile={selectedFile}
+            fileContent={fileContent}
+            loading={loadingFile}
+            onSave={handleSaveFile}
+            onClose={handleCloseEditor}
+          />
+        </div>
+      ) : (
+        // Placeholder quando nenhum arquivo está selecionado
+        <div className="flex-1 bg-gray-900 flex items-center justify-center text-gray-400">
+          <p className="text-sm">Selecione um arquivo para editar</p>
+        </div>
+      )}
+      
+      {/* Painel lateral com lista de arquivos */}
+      <div className="w-80 flex-shrink-0 flex flex-col bg-gray-900 border-l border-gray-700">
+        {/* Header compacto */}
+        <div className="p-3 border-b border-gray-700">
         {/* Breadcrumb compacto */}
         <div className="flex items-center space-x-1 mb-2 text-xs">
           {generateBreadcrumb().map((crumb, index) => (
@@ -210,28 +285,6 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
               title="Atualizar"
             >
               <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-            
-            {/* Botão de teste temporário */}
-            <button
-              onClick={async () => {
-                console.log('[FILE MANAGER TEST] Testing direct command');
-                if (fileCommands && fileCommands.executeCommand) {
-                  try {
-                    const testCommand = `exec("import os\\nprint('Files in root:')\\nfor f in os.listdir('/'):\\n    print('-', f)")`;
-                    const result = await fileCommands.executeCommand(testCommand, 5000);
-                    console.log('[FILE MANAGER TEST] Direct result:', result);
-                    alert(`Resultado do teste:\n${result}`);
-                  } catch (error) {
-                    console.error('[FILE MANAGER TEST] Error:', error);
-                    alert(`Erro no teste: ${error}`);
-                  }
-                }
-              }}
-              className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors text-xs ml-1"
-              title="Teste Direto"
-            >
-              T
             </button>
             
           </div>
@@ -299,21 +352,24 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
         <div>Caminho: {currentPath}</div>
       </div>
 
-      {/* File List */}
-      <div className="flex-1 overflow-hidden">
-        <FileList
-          items={items}
-          loading={loading}
-          selectedItems={selectedItems}
-          onItemClick={(item) => {
-            if (item.type === 'directory') {
-              navigateToDirectory(item.path);
-            }
-          }}
-          onItemSelect={toggleItemSelection}
-          onDownload={handleDownload}
-          onDelete={handleDelete}
-        />
+        {/* File List */}
+        <div className="flex-1 overflow-hidden">
+          <FileList
+            items={items}
+            loading={loading}
+            selectedItems={selectedItems}
+            onItemClick={(item) => {
+              if (item.type === 'directory') {
+                navigateToDirectory(item.path);
+              } else {
+                handleOpenFile(item);
+              }
+            }}
+            onItemSelect={toggleItemSelection}
+            onDownload={handleDownload}
+            onDelete={handleDelete}
+          />
+        </div>
       </div>
     </div>
   );

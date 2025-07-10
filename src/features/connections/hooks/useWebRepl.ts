@@ -190,7 +190,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Detecta se é conteúdo de arquivo (string longa começando com aspas)
       if (/^'.*/.test(data.trim()) && data.length > 50) {
         // É conteúdo de arquivo, só processa comandos de arquivo
-        fileCommands.processMessage(allMessages.current);
+        if (fileMessageCallback.current) {
+          fileMessageCallback.current(allMessages.current);
+        }
         return;
       }
       

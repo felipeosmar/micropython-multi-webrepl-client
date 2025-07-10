@@ -72,6 +72,7 @@ export const useSimpleFileCommands = (
 
     // Procura pelo marcador de fim do comando
     if (fullMessage.includes(startMarker) && fullMessage.includes(endMarker)) {
+      console.log(`[FILE CMD] Both markers found for ${currentCommand.commandId}!`);
       const command = commandQueueRef.current.shift();
       if (command) {
         clearTimeout(command.timeout);
@@ -253,9 +254,11 @@ export const useSimpleFileCommands = (
           }
           return null;
         }).filter(Boolean);
+        console.log(`[FILE CMD] listFiles parsed files:`, files);
         return files;
       }
       
+      console.log(`[FILE CMD] listFiles returning empty array - result was not string`);
       return [];
     } catch (error) {
       console.error('ListFiles error:', error);

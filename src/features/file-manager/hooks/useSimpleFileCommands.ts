@@ -237,9 +237,12 @@ export const useSimpleFileCommands = (
       
       const result = await executeCommand(command, 8000);
       
+      console.log(`[FILE CMD] listFiles raw result:`, result);
+      
       // Processa resultado linha por linha
       if (typeof result === 'string') {
         const lines = result.split('\n').filter(line => line.trim());
+        console.log(`[FILE CMD] listFiles lines:`, lines);
         const files = lines.map(line => {
           const parts = line.trim().split(' ');
           if (parts.length >= 3) {

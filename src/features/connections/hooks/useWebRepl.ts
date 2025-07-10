@@ -29,6 +29,8 @@ export const useWebRepl = (url: string | null, password?: string) => {
   
   // Buffer para acumular mensagens de arquivo - DEVE ser declarado no início
   const allMessages = useRef<string>('');
+  // Callback para processar mensagens de arquivo
+  const fileMessageCallback = useRef<((message: string) => void) | null>(null);
 
 
   /**
@@ -199,7 +201,12 @@ export const useWebRepl = (url: string | null, password?: string) => {
           data.includes('exec("with open(') ||
           allMessages.current.includes('__START_') && allMessages.current.includes('__END_')) {
         // Processa comandos de arquivo com buffer acumulado
-        fileCommands.processMessage(allMessages.current);
+        if (fileMessageCallback.current) {
+          console.log('[WEBREPL] Processing file command message');
+          fileMessageCallback.current(allMessages.current);
+        } else {
+          console.log('[WEBREPL] No file message callback available');
+        }
         
         // Limpa o buffer se o comando foi completado
         if (allMessages.current.includes('__END_')) {
@@ -208,7 +215,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
             const commandId = endMarkerMatch[1];
             if (allMessages.current.includes(`__START_${commandId}__`)) {
               // Comando completo processado, limpa o buffer
-              allMessages.current = '';
+              setTimeout(() => {
+                allMessages.current = '';
+              }, 100);
             }
           }
         }
@@ -311,6 +320,13 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Integração com comandos de arquivo
   const isConnected = status === ReplStatus.CONNECTED;
   const fileCommands = useSimpleFileCommands(sendFileCommand, isConnected);
+  
+  // Registra o callback para processar mensagens
+  useEffect(() => {
+    if (fileCommands && fileCommands.processMessage) {
+      fileMessageCallback.current = fileCommands.processMessage;
+    }
+  }, [fileCommands]);
 
   return { 
     status, 

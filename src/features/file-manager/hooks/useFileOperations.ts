@@ -53,6 +53,9 @@ export const useFileOperations = (
       console.log(`[FILE OPS] Listing files in path: ${normalizedPath}`);
       const items = await fileCommands.listFiles(normalizedPath);
       
+      console.log(`[FILE OPS] Received items:`, items);
+      console.log(`[FILE OPS] Items type:`, typeof items, 'Is Array:', Array.isArray(items));
+      
       // Converte para formato interno
       const fileSystemItems: FileSystemItem[] = items.map((item: any) => ({
         name: item.name,

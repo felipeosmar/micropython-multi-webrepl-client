@@ -346,14 +346,22 @@ const CardLayout: React.FC<CardLayoutProps> = ({
                 onMonitoringData={onMonitoringData}
               />
             </div>
-            {fileCommands && (
-              <div className="w-80 flex-shrink-0">
-                <FileManagerPanel
-                  fileCommands={fileCommands}
-                  isConnected={isConnected}
-                />
-              </div>
-            )}
+            {(() => {
+              console.log('[REPL CARD] fileCommands:', fileCommands);
+              console.log('[REPL CARD] isConnected:', isConnected);
+              return fileCommands ? (
+                <div className="w-80 flex-shrink-0">
+                  <FileManagerPanel
+                    fileCommands={fileCommands}
+                    isConnected={isConnected}
+                  />
+                </div>
+              ) : (
+                <div className="w-80 flex-shrink-0 p-4 bg-gray-900 text-gray-400">
+                  <p>File commands não disponível</p>
+                </div>
+              );
+            })()}
           </div>
         )}
 

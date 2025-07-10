@@ -261,8 +261,8 @@ export const useSimpleFileCommands = (
    */
   const listFiles = useCallback(async (path: string = '/'): Promise<any[]> => {
     try {
-      // Comando super simples em uma linha válida - usando exec() para multilinhas
-      const command = `exec("import os\\nfor f in os.ilistdir('${path}'):\\n    print(f[0], f[1], f[3])")`;
+      // Usa uma abordagem diferente com print separado para evitar concatenação
+      const command = `exec("import os\\nfiles = []\\nfor f in os.ilistdir('${path}'):\\n    files.append((f[0], f[1], f[3]))\\nfor f in files:\\n    print(f[0], f[1], f[2])")`;
       
       const result = await executeCommand(command, 8000);
       

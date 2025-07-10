@@ -237,28 +237,21 @@ export const useSimpleFileCommands = (
       });
 
       try {
-        // Se o comando já usa exec(), precisamos de uma abordagem diferente
-        if (command.includes('exec(')) {
-          // Extrai o conteúdo do exec e adiciona os marcadores dentro dele
-          const execContent = command.match(/exec\("(.*)"\)/);
-          if (execContent && execContent[1]) {
-            // Adiciona os marcadores dentro do exec existente
-            const innerCode = execContent[1].replace(/\\n/g, '\n');
-            const wrappedInner = `import time\nprint("__START_${commandId}__")\ntime.sleep(0.1)\n${innerCode}\ntime.sleep(0.1)\nprint("__END_${commandId}__")`;
-            const wrappedCommand = `exec("""${wrappedInner}""")`;
-            
-            console.log(`[FILE CMD] Sending wrapped exec command for ${commandId}`);
-            sendCommand(wrappedCommand);
-          } else {
-            // Fallback se não conseguir parsear
-            const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
-            console.log(`[FILE CMD] Sending simple wrapped command for ${commandId}`);
-            sendCommand(wrappedCommand);
-          }
+        // Para comandos de leitura de arquivo, usa uma abordagem mais simples
+        if (command.includes('with open(') && command.includes('repr(content)')) {
+          // Comando de leitura de arquivo - não adiciona delays para evitar problemas
+          const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+          console.log(`[FILE CMD] Sending file read command for ${commandId}`);
+          sendCommand(wrappedCommand);
+        } else if (command.includes('exec(') && command.includes('os.ilistdir')) {
+          // Comando de listagem de arquivos - precisa de tratamento especial
+          const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+          console.log(`[FILE CMD] Sending file list command for ${commandId}`);
+          sendCommand(wrappedCommand);
         } else {
-          // Comando simples, pode usar concatenação direta
-          const wrappedCommand = `import time; print("__START_${commandId}__"); time.sleep(0.1); ${command}; time.sleep(0.1); print("__END_${commandId}__")`;
-          console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
+          // Outros comandos
+          const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+          console.log(`[FILE CMD] Sending generic command for ${commandId}`);
           sendCommand(wrappedCommand);
         }
       } catch (error) {

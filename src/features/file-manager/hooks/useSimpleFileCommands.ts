@@ -69,9 +69,13 @@ export const useSimpleFileCommands = (
     // Atualiza buffer com a mensagem completa
     currentCommand.buffer = fullMessage;
     console.log(`[FILE CMD] Updated buffer for ${currentCommand.commandId}`);
+    console.log(`[FILE CMD] Buffer content:`, fullMessage.substring(fullMessage.length - 200)); // Últimos 200 chars
 
     // Procura pelo marcador de fim do comando
-    if (fullMessage.includes(startMarker) && fullMessage.includes(endMarker)) {
+    // Verifica também se o endMarker está presente mesmo que colado com dados
+    const hasEndMarker = fullMessage.includes(endMarker) || fullMessage.match(new RegExp(`__END_${currentCommand.commandId}__`));
+    
+    if (fullMessage.includes(startMarker) && hasEndMarker) {
       console.log(`[FILE CMD] Both markers found for ${currentCommand.commandId}!`);
       const command = commandQueueRef.current.shift();
       if (command) {
@@ -80,7 +84,15 @@ export const useSimpleFileCommands = (
         // Extrai resultado entre os marcadores
         // Usa lastIndexOf para pegar a última ocorrência dos marcadores (saída real, não comando)
         const startIndex = command.buffer.lastIndexOf(startMarker);
-        const endIndex = command.buffer.lastIndexOf(endMarker);
+        let endIndex = command.buffer.lastIndexOf(endMarker);
+        
+        // Verifica se o endMarker está colado com dados (como "__ENDboot.py")
+        if (endIndex === -1) {
+          const endMarkerPartial = command.buffer.match(/__END_\w+__(.+)/);
+          if (endMarkerPartial) {
+            endIndex = endMarkerPartial.index || -1;
+          }
+        }
         
         if (startIndex !== -1 && endIndex !== -1 && startIndex < endIndex) {
           // Procura pela primeira quebra de linha após o marcador START
@@ -210,8 +222,9 @@ export const useSimpleFileCommands = (
       });
 
       try {
-        // Envolve comando com marcadores únicos - linha única
-        const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+        // Cria um comando mais robusto que garante separação adequada
+        // Usa import time e sleep para dar tempo do comando ser exibido completamente
+        const wrappedCommand = `import time; print("__START_${commandId}__"); time.sleep(0.1); ${command}; time.sleep(0.1); print("__END_${commandId}__")`;
 
         // Envia comando normalmente pelo terminal
         console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);

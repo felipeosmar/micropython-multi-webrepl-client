@@ -60,6 +60,14 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
       }, 1000);
     }
   }, [isConnected]); // Removido listFiles da dependência para evitar loops
+  
+  // Força recarga da lista quando o componente é montado
+  useEffect(() => {
+    if (isConnected && !loading) {
+      console.log('[FILE MANAGER] Component mounted, loading files...');
+      listFiles(currentPath);
+    }
+  }, []); // Executa apenas uma vez quando o componente é montado
 
   /**
    * Gera breadcrumb do caminho atual
@@ -285,6 +293,27 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
               title="Atualizar"
             >
               <RefreshIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            </button>
+            
+            {/* Botão de debug temporário */}
+            <button
+              onClick={async () => {
+                console.log('[FILE MANAGER DEBUG] Testing listFiles directly');
+                try {
+                  if (fileCommands && fileCommands.listFiles) {
+                    const files = await fileCommands.listFiles('/');
+                    console.log('[FILE MANAGER DEBUG] Files received:', files);
+                    alert(`Arquivos encontrados: ${files.length}\n${files.map(f => `${f.name} (${f.type})`).join('\n')}`);
+                  }
+                } catch (error) {
+                  console.error('[FILE MANAGER DEBUG] Error:', error);
+                  alert(`Erro: ${error}`);
+                }
+              }}
+              className="p-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded transition-colors text-xs ml-1"
+              title="Debug"
+            >
+              D
             </button>
             
           </div>

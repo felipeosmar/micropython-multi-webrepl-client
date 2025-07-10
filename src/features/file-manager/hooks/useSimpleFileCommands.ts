@@ -88,9 +88,12 @@ export const useSimpleFileCommands = (
         
         // Verifica se o endMarker está colado com dados (como "__ENDboot.py")
         if (endIndex === -1) {
-          const endMarkerPartial = command.buffer.match(/__END_\w+__(.+)/);
-          if (endMarkerPartial) {
-            endIndex = endMarkerPartial.index || -1;
+          // Procura por padrão onde o marcador END está colado com dados
+          const endMarkerRegex = new RegExp(`__END_${commandId}__`);
+          const match = command.buffer.match(endMarkerRegex);
+          if (match && match.index !== undefined) {
+            endIndex = match.index;
+            console.log(`[FILE CMD] Found END marker at index ${endIndex} (was concatenated with data)`);
           }
         }
         
@@ -125,10 +128,22 @@ export const useSimpleFileCommands = (
             return trimmed && 
                    !trimmed.startsWith('>>>') &&
                    !trimmed.includes('exec(') &&
-                   !trimmed.includes('print(');
+                   !trimmed.includes('print("__') &&
+                   !trimmed.includes('import time') &&
+                   !trimmed.includes('import sys');
           });
           
           result = cleanLines.join('\n').trim();
+          
+          // Se o resultado está vazio mas temos dados no buffer após o END marker
+          if (!result && endIndex < command.buffer.length - endMarker.length) {
+            // Tenta extrair dados que possam estar colados após o marcador END
+            const dataAfterEnd = command.buffer.substring(endIndex + endMarker.length).trim();
+            if (dataAfterEnd) {
+              console.log(`[FILE CMD] Found data after END marker: ${dataAfterEnd.substring(0, 50)}...`);
+              result = dataAfterEnd.split('\n')[0]; // Pega a primeira linha após o marcador
+            }
+          }
           
           console.log(`[FILE CMD] Command ${command.commandId} completed with result:`, result);
           console.log(`[FILE CMD] Raw extracted content between markers:`, command.buffer.substring(safeContentStart, endIndex));

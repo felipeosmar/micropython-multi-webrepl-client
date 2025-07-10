@@ -146,13 +146,24 @@ const WebReplCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onR
 
 // Componente para a lógica Serial
 const SerialCardContent: React.FC<ReplConnectionCardProps> = ({ connection, onRemove, onEdit }) => {
-  const { status, lines, sendCommand, sendDirectCommand, connect, clearOutput, autoScroll, fileCommands } = useSerial(
+  const serialHook = useSerial(
     connection.port, 
     connection.baudRate,
     connection.lineEnding,
     connection.autoScroll,
     connection.showTimestamp
   );
+  const { status, lines, sendCommand, sendDirectCommand, connect, clearOutput, autoScroll } = serialHook;
+  const fileCommands = {
+    executeCommand: serialHook.executeCommand,
+    listFiles: serialHook.listFiles,
+    readFile: serialHook.readFile,
+    writeFile: serialHook.writeFile,
+    createDirectory: serialHook.createDirectory,
+    deleteFile: serialHook.deleteFile,
+    deleteDirectory: serialHook.deleteDirectory,
+    processMessage: serialHook.processMessage
+  };
   const { 
     monitoringData, 
     updateSystemMetrics, 
@@ -233,8 +244,6 @@ const CardLayout: React.FC<CardLayoutProps> = ({
   children, 
   autoScroll, 
   onClear,
-  sendData,
-  sendCommand,
   sendDirectCommand,
   fileCommands,
   monitoringData,
@@ -242,7 +251,6 @@ const CardLayout: React.FC<CardLayoutProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'terminal' | 'files' | 'monitoring'>('terminal');
   const isConnected = status === ReplStatus.CONNECTED;
-  const isWebRepl = connection.connectionType === 'webrepl';
 
   return (
     <div className="bg-gray-800 rounded-lg shadow-lg flex flex-col h-[500px] overflow-hidden border border-gray-700">

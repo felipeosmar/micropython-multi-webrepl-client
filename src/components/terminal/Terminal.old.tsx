@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useMonitoringParser } from '../../features/monitoring/hooks';
 import { ParsedMonitoringMessage } from '../../features/monitoring/types';
 
 /**
@@ -29,14 +28,13 @@ interface TerminalProps {
  * - Botão de limpeza
  * - Foco automático no campo de entrada
  */
-const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true, onClear, onMonitoringData }) => {
+const Terminal: React.FC<TerminalProps> = ({ lines, onCommand, autoScroll = true, onClear }) => {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const endOfLinesRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { parseMonitoringData, isMonitoringData, cleanLine } = useMonitoringParser();
 
   useEffect(() => {
     if (autoScroll && scrollContainerRef.current) {

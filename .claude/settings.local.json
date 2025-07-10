@@ -25,7 +25,8 @@
       "Bash(claude doctor)",
       "Bash(node:*)",
       "Bash(npm:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   }

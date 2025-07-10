@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom'
+import { vi } from 'vitest'
 
 // Fix for React DOM in test environment
 Object.defineProperty(window, 'location', {
@@ -28,7 +29,7 @@ Object.defineProperty(global.navigator, 'serial', {
 })
 
 // Mock WebSocket
-global.WebSocket = vi.fn().mockImplementation(() => ({
+const mockWebSocket = vi.fn().mockImplementation(() => ({
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   send: vi.fn(),
@@ -42,13 +43,17 @@ global.WebSocket = vi.fn().mockImplementation(() => ({
   onmessage: null,
   onerror: null,
   onclose: null,
-}))
+})) as any;
 
-// Mock WebSocket constants
-Object.defineProperty(global.WebSocket, 'CONNECTING', { value: 0 })
-Object.defineProperty(global.WebSocket, 'OPEN', { value: 1 })
-Object.defineProperty(global.WebSocket, 'CLOSING', { value: 2 })
-Object.defineProperty(global.WebSocket, 'CLOSED', { value: 3 })
+// Add static properties to match WebSocket interface
+mockWebSocket.CONNECTING = 0;
+mockWebSocket.OPEN = 1;
+mockWebSocket.CLOSING = 2;
+mockWebSocket.CLOSED = 3;
+
+global.WebSocket = mockWebSocket;
+
+// Constants are already defined above
 
 // Mock localStorage
 Object.defineProperty(window, 'localStorage', {

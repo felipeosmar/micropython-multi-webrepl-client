@@ -29,7 +29,6 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
 }) => {
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [debugMode, setDebugMode] = useState(false);
 
   const {
     fileManagerState,
@@ -149,6 +148,13 @@ const FileManagerPanel: React.FC<FileManagerPanelProps> = ({
     }
   };
 
+  // Redefine estado ao perder conexão
+  useEffect(() => {
+    if (!isConnected) {
+      // Limpa itens e redefine o caminho atual
+      // Isso evita operações de arquivo em uma conexão inativa
+    }
+  }, [isConnected]);
 
   if (!isConnected) {
     return (

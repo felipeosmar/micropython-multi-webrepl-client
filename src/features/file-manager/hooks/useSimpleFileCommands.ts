@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 /**
  * Hook simples para comandos de arquivo que não interfere com o terminal
@@ -8,7 +8,7 @@ export const useSimpleFileCommands = (
   sendCommand: (command: string) => void,
   isConnected?: boolean
 ) => {
-  const commandQueue = useRef<{
+  const commandQueueRef = useRef<{
     resolve: (result: any) => void;
     reject: (error: Error) => void;
     timeout: NodeJS.Timeout;
@@ -16,20 +16,44 @@ export const useSimpleFileCommands = (
     buffer: string;
     isActive: boolean;
   }[]>([]);
-  
-  const lastProcessedLength = useRef(0);
+  const isExecutingRef = useRef(false);
+  const commandTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const queueTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const clearQueue = useCallback(() => {
+    console.log('[FILE CMD] Clearing command queue...');
+    commandQueueRef.current.forEach(cmd => {
+      clearTimeout(cmd.timeout);
+      cmd.reject(new Error('Command queue cleared.'));
+    });
+    commandQueueRef.current = [];
+    isExecutingRef.current = false;
+    if (commandTimeoutRef.current) {
+      clearTimeout(commandTimeoutRef.current);
+      commandTimeoutRef.current = null;
+    }
+    if (queueTimeoutRef.current) {
+      clearTimeout(queueTimeoutRef.current);
+      queueTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) {
+      clearQueue();
+    }
+  }, [isConnected, clearQueue]);
 
   /**
    * Processa mensagens recebidas, apenas para comandos de arquivo
    */
   const processMessage = useCallback((fullMessage: string) => {
-    if (commandQueue.current.length === 0) {
+    if (commandQueueRef.current.length === 0) {
       // Reset contador quando não há comandos ativos
-      lastProcessedLength.current = fullMessage.length;
       return;
     }
 
-    const currentCommand = commandQueue.current[0];
+    const currentCommand = commandQueueRef.current[0];
     if (!currentCommand || !currentCommand.isActive) return;
 
     const startMarker = `__START_${currentCommand.commandId}__`;
@@ -50,7 +74,7 @@ export const useSimpleFileCommands = (
 
     // Procura pelo marcador de fim do comando
     if (currentCommand.buffer.includes(endMarker)) {
-      const command = commandQueue.current.shift();
+      const command = commandQueueRef.current.shift();
       if (command) {
         clearTimeout(command.timeout);
         
@@ -144,16 +168,16 @@ export const useSimpleFileCommands = (
     const startWaitTime = Date.now();
     
     // Previne execução simultânea de comandos - aguarda se há comando em execução
-    while (commandQueue.current.length > 0) {
+    while (commandQueueRef.current.length > 0) {
       // Verifica se já esperou tempo demais
       if (Date.now() - startWaitTime > maxWaitTime) {
         console.log(`[FILE CMD] Queue wait timeout, clearing stuck commands...`);
         // Limpa comandos presos na fila
-        commandQueue.current.forEach(cmd => {
+        commandQueueRef.current.forEach(cmd => {
           clearTimeout(cmd.timeout);
           cmd.reject(new Error('Queue timeout - connection may be lost'));
         });
-        commandQueue.current = [];
+        commandQueueRef.current = [];
         break;
       }
       
@@ -168,16 +192,16 @@ export const useSimpleFileCommands = (
       
       const timeout = setTimeout(() => {
         // Remove da queue se timeout
-        const index = commandQueue.current.findIndex(cmd => cmd.commandId === commandId);
+        const index = commandQueueRef.current.findIndex(cmd => cmd.commandId === commandId);
         if (index !== -1) {
           console.log(`[FILE CMD] Command ${commandId} timed out after ${timeoutMs}ms`);
-          commandQueue.current[index].isActive = false;
-          commandQueue.current.splice(index, 1);
+          commandQueueRef.current[index].isActive = false;
+          commandQueueRef.current.splice(index, 1);
         }
         reject(new Error(`Command timeout: ${command.substring(0, 50)}...`));
       }, timeoutMs);
 
-      commandQueue.current.push({
+      commandQueueRef.current.push({
         resolve,
         reject,
         timeout,
@@ -195,10 +219,10 @@ export const useSimpleFileCommands = (
         sendCommand(wrappedCommand);
       } catch (error) {
         // Se falhar ao enviar comando, remove da fila e rejeita
-        const index = commandQueue.current.findIndex(cmd => cmd.commandId === commandId);
+        const index = commandQueueRef.current.findIndex(cmd => cmd.commandId === commandId);
         if (index !== -1) {
-          clearTimeout(commandQueue.current[index].timeout);
-          commandQueue.current.splice(index, 1);
+          clearTimeout(commandQueueRef.current[index].timeout);
+          commandQueueRef.current.splice(index, 1);
         }
         reject(new Error(`Failed to send command: ${error}`));
       }
@@ -385,19 +409,6 @@ export const useSimpleFileCommands = (
     }
   }, [executeCommand]);
 
-  /**
-   * Limpa a fila de comandos quando a conexão é perdida
-   */
-  const clearQueue = useCallback(() => {
-    console.log(`[FILE CMD] Clearing command queue (${commandQueue.current.length} commands)`);
-    commandQueue.current.forEach(cmd => {
-      clearTimeout(cmd.timeout);
-      cmd.reject(new Error('Connection lost - command cancelled'));
-    });
-    commandQueue.current = [];
-    lastProcessedLength.current = 0;
-  }, []);
-
   return {
     processMessage,
     executeCommand,
@@ -407,6 +418,6 @@ export const useSimpleFileCommands = (
     createDirectory,
     deleteFile,
     deleteDirectory,
-    clearQueue
+    clearQueue,
   };
 };

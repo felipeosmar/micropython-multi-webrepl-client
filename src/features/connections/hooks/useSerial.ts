@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { ReplStatus } from '../types';
 import { useSimpleFileCommands } from '../../file-manager/hooks';
-
-// Removido: interface duplicada - usando tipos globais do Web Serial API
+import { SYSTEM_MESSAGES } from '../../../shared/constants/system.messages';
 
 /**
  * Hook customizado para gerenciar conexões seriais com MicroPython
@@ -29,8 +28,8 @@ export const useSerial = (
 ) => {
   const [status, setStatus] = useState<ReplStatus>(ReplStatus.DISCONNECTED);
   const [lines, setLines] = useState<string[]>([]);
-  const reader = useRef<ReadableStreamDefaultReader<string> | null>(null);
-  const writer = useRef<WritableStreamDefaultWriter<BufferSource> | null>(null);
+  const reader = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+  const writer = useRef<WritableStreamDefaultWriter<Uint8Array> | null>(null);
   const keepReading = useRef(true);
   const portRef = useRef(port);
   const connecting = useRef(false);
@@ -53,24 +52,38 @@ export const useSerial = (
       processedData = `[${timestamp}] ${sanitizedData}`;
     }
     
-    setLines(prev => {
-      if (prev.length === 0) {
-        return [processedData];
-      }
-      const lastLine = prev[prev.length - 1];
-      // Handle newlines properly
-      if (processedData.includes('\n')) {
-        const parts = processedData.split('\n');
-        const firstPart = parts.shift() || '';
-        const newLastLine = lastLine + firstPart;
-        return [...prev.slice(0, -1), newLastLine, ...parts];
-      } else {
-        // Append to last line
-        const newLastLine = lastLine + processedData;
-        return [...prev.slice(0, -1), newLastLine];
-      }
-    });
+    setLines(prev => [...prev, processedData]);
   }, [showTimestamp]);
+
+  /**
+   * Envia dados brutos para a porta serial
+   * @param data - String a ser enviada
+   */
+  const sendData = useCallback(async (data: string) => {
+    if (writer.current && status === ReplStatus.CONNECTED) {
+      const encoder = new TextEncoder();
+      await writer.current.write(encoder.encode(data));
+    }
+  }, [status]);
+
+  /**
+   * Envia um comando para o MicroPython REPL
+   * Adiciona o terminador de linha apropriado conforme configuração
+   * @param command - Comando a ser executado
+   */
+  const sendCommand = useCallback((command: string) => {
+    let line = command;
+    if (lineEnding === 'carriageReturn') {
+      line += '\r';
+    } else if (lineEnding === 'newline') {
+      line += '\n';
+    } else if (lineEnding === 'both') {
+      line += '\r\n';
+    }
+    sendData(line);
+  }, [sendData, lineEnding]);
+
+  const fileCommands = useSimpleFileCommands(sendCommand);
 
   /**
    * Desconecta da porta serial e limpa todos os recursos
@@ -144,13 +157,13 @@ export const useSerial = (
     // Only update status if not already disconnected and not in a silent disconnect
     if (status !== ReplStatus.DISCONNECTED && !connecting.current) {
       setStatus(ReplStatus.DISCONNECTED);
-      appendLine('[SYSTEM] Disconnected.');
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.DISCONNECTED}`);
       // Limpa fila de comandos quando desconecta
       if (fileCommands.clearQueue) {
         fileCommands.clearQueue();
       }
     }
-  }, [appendLine, status]);
+  }, [appendLine, status, fileCommands]);
 
   /**
    * Inicia o loop de leitura contínua da porta serial
@@ -158,16 +171,17 @@ export const useSerial = (
    */
   const startReadingLoop = useCallback(async () => {
     if (!reader.current || !keepReading.current) return;
-    
+    const decoder = new TextDecoder();
+
     try {
       while (keepReading.current && reader.current) {
         const { value, done } = await reader.current.read();
         if (done) {
           break;
         }
-        // Better data filtering to prevent corruption
-        if (value && typeof value === 'string') {
-          appendLine(value);
+        if (value) {
+          const text = decoder.decode(value, { stream: true });
+          appendLine(text);
         }
       }
     } catch (error: any) {
@@ -177,14 +191,14 @@ export const useSerial = (
     } finally {
       if (keepReading.current) {
         setStatus(ReplStatus.DISCONNECTED);
-        appendLine('[SYSTEM] Disconnected from serial port.');
+        appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.DISCONNECTED}`);
         // Limpa fila de comandos quando há erro de leitura
         if (fileCommands.clearQueue) {
           fileCommands.clearQueue();
         }
       }
     }
-  }, [appendLine]);
+  }, [appendLine, fileCommands]);
 
   /**
    * Estabelece conexão com a porta serial
@@ -195,7 +209,7 @@ export const useSerial = (
    */
   const connect = useCallback(async () => {
     if (!portRef.current) {
-      appendLine('[SYSTEM] Error: No serial port provided.');
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.SERIAL_PORT_NOT_SELECTED}`);
       setStatus(ReplStatus.ERROR);
       return;
     }
@@ -206,7 +220,7 @@ export const useSerial = (
     try {
       connecting.current = true;
       setStatus(ReplStatus.CONNECTING);
-      appendLine('[SYSTEM] Opening serial port...');
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTING}`);
 
       // Create new AbortController for this connection attempt
       abortController.current = new AbortController();
@@ -242,7 +256,7 @@ export const useSerial = (
       // Check if port is still available
       const ports = await navigator.serial.getPorts();
       if (!ports.includes(portRef.current)) {
-        throw new Error('Serial port is no longer available');
+        throw new Error(SYSTEM_MESSAGES.CONNECTION.SERIAL_PORT_NOT_AVAILABLE);
       }
 
       await portRef.current.open({ 
@@ -252,18 +266,22 @@ export const useSerial = (
         parity: 'none',
         flowControl: 'none'
       });
-      appendLine(`[SYSTEM] Opened serial port at ${baudRate} baud.`);
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTED}`);
 
-      writer.current = portRef.current.writable!.getWriter();
+      if (!portRef.current.writable) {
+        throw new Error("Writable stream not available");
+      }
+      writer.current = portRef.current.writable.getWriter();
 
-      const textDecoder = new TextDecoderStream('utf-8', { fatal: false, ignoreBOM: true });
-      const readable = portRef.current.readable!;
-      readable.pipeTo(textDecoder.writable).catch(() => {});
-      reader.current = textDecoder.readable.getReader();
+      if (!portRef.current.readable) {
+        throw new Error("Readable stream not available");
+      }
+      // Obter o leitor diretamente, que fornecerá Uint8Array
+      reader.current = portRef.current.readable.getReader();
 
       connecting.current = false;
       setStatus(ReplStatus.CONNECTED);
-      appendLine('[SYSTEM] Connected. Press Enter to get a prompt.');
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.REPL_READY}`);
       keepReading.current = true;
 
       // Start the reading loop separately
@@ -271,7 +289,7 @@ export const useSerial = (
 
     } catch (error: any) {
       connecting.current = false;
-      appendLine(`[SYSTEM] Connection Error: ${error.message}`);
+      appendLine(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED}: ${error.message}`);
       setStatus(ReplStatus.ERROR);
       // Limpa fila de comandos quando há erro de conexão
       if (fileCommands.clearQueue) {
@@ -291,7 +309,7 @@ export const useSerial = (
         } catch (e) {}
       }
     }
-  }, [appendLine, status, startReadingLoop, disconnect]);
+  }, [appendLine, status, startReadingLoop, baudRate, fileCommands]);
 
   const checkPortAvailability = useCallback(async () => {
     if (!portRef.current) return false;
@@ -300,9 +318,13 @@ export const useSerial = (
       // Check if port is still available in the system
       const ports = await navigator.serial.getPorts();
       return ports.includes(portRef.current);
-    } catch {
+    } catch (error) {
       return false;
     }
+  }, []);
+
+  const clearOutput = useCallback(() => {
+    setLines([]);
   }, []);
 
   // Update port reference when prop changes and auto-connect
@@ -355,92 +377,20 @@ export const useSerial = (
 
   useEffect(() => {
     return () => {
-      keepReading.current = false;
-      if (readingLoop.current) {
-        readingLoop.current.catch(() => {});
-      }
       disconnect();
     };
-  }, []);
+  }, [disconnect]);
 
-
-  /**
-   * Envia dados brutos para a porta serial
-   * @param data - String a ser enviada
-   */
-  const sendData = useCallback(async (data: string) => {
-    if (writer.current) {
-        const encoder = new TextEncoder();
-        await writer.current.write(encoder.encode(data));
-    } else {
-      appendLine('[SYSTEM] Cannot send data, not connected.');
-    }
-  }, [appendLine]);
-
-  /**
-   * Envia um comando para o MicroPython REPL
-   * Adiciona o terminador de linha apropriado conforme configuração
-   * @param command - Comando a ser executado
-   */
-  const sendCommand = useCallback((command: string) => {
-    if (command.trim() === '') {
-      // Envia carriage return para obter novo prompt
-      sendData('\r');
-      return;
-    }
-    
-    // Seleciona o terminador de linha baseado na configuração
-    let ending = '';
-    switch (lineEnding) {
-      case 'newline':
-        ending = '\n';
-        break;
-      case 'carriageReturn':
-        ending = '\r';  // Padrão para MicroPython
-        break;
-      case 'both':
-        ending = '\r\n';
-        break;
-      case 'none':
-      default:
-        ending = '';
-        break;
-    }
-    
-    sendData(command + ending);
-  }, [sendData, lineEnding]);
-
-  /**
-   * Limpa todo o conteúdo do terminal
-   */
-  const clearOutput = useCallback(() => {
-    setLines([]);
-  }, []);
-
-  // Função especial para comandos de monitoramento que não interfere com a fila de comandos
-  const sendDirectCommand = useCallback((command: string) => {
-    if (command.trim() === '') return;
-    
-    console.log(`[SERIAL DIRECT] Sending direct command: ${command.substring(0, 50)}...`);
-    // Para comandos de monitoramento, usa carriage return (padrão para MicroPython)
-    sendData(command + '\r');
-  }, [sendData]);
-
-  // Para Serial, usa o sendCommand normal já que não tem o problema de reset
-  const isConnected = status === ReplStatus.CONNECTED;
-  const fileCommands = useSimpleFileCommands(sendCommand, isConnected);
-
-  // Processar mensagens para comandos de arquivo apenas quando necessário
-  useEffect(() => {
-    if (lines.length > 0) {
-      // Processa toda a mensagem concatenada, não apenas a última linha
-      const allMessages = lines.join('\n');
-      // Só processa se há marcadores de comando de arquivo
-      if (allMessages.includes('__START_') || allMessages.includes('__END_')) {
-        fileCommands.processMessage(allMessages);
-      }
-    }
-  }, [lines, fileCommands]);
-  
-  return { status, lines, sendCommand, sendDirectCommand, connect, disconnect, checkPortAvailability, clearOutput, autoScroll, fileCommands };
+  return {
+    status,
+    lines,
+    autoScroll,
+    connect,
+    disconnect,
+    sendCommand,
+    sendDirectCommand: sendCommand, // Alias para compatibilidade
+    clearOutput,
+    checkPortAvailability,
+    ...fileCommands,
+  };
 };

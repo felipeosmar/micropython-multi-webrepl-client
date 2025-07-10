@@ -185,3 +185,5 @@ export function ConnectionProvider({ children }: ConnectionProviderProps) {
     </ConnectionContext.Provider>
   );
 }
+
+export { ConnectionContext };

@@ -1,39 +1,72 @@
-import { renderHook, act } from '@testing-library/react'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { useWebRepl } from '../useWebRepl'
-import { ReplStatus } from '../../types'
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { ReplStatus } from '../../types';
+import { SYSTEM_MESSAGES } from '../../../../shared/constants/system.messages';
 
-// Mock dependencies
+// Mock de dependências ANTES de importar o hook
 vi.mock('../../../file-manager/hooks', () => ({
-  useSimpleFileCommands: vi.fn(() => ({
+  useSimpleFileCommands: () => ({
     processMessage: vi.fn(),
-  })),
-}))
+    clearQueue: vi.fn(),
+  }),
+}));
+
+import { useWebRepl } from '../useWebRepl';
+
+// Mock dependencies already defined above
 
 describe('useWebRepl', () => {
-  let mockWebSocket: any
-  let messageHandlers: { [key: string]: Function }
+  let lastWebSocket: any;
 
   beforeEach(() => {
-    vi.clearAllMocks()
-    messageHandlers = {}
-
-    // Mock WebSocket
-    mockWebSocket = {
-      readyState: WebSocket.CONNECTING,
-      send: vi.fn(),
-      close: vi.fn(),
-      addEventListener: vi.fn((event, handler) => {
-        messageHandlers[event] = handler
-      }),
-      removeEventListener: vi.fn(),
-      onopen: null,
-      onmessage: null,
-      onerror: null,
-      onclose: null,
-    }
-
-    global.WebSocket = vi.fn().mockImplementation(() => mockWebSocket)
+    vi.clearAllMocks();
+    // Mock WebSocket rastreável e compatível com Vitest
+    const WebSocketMock = vi.fn().mockImplementation(function (this: any, url: string) {
+      lastWebSocket = this;
+      this.url = url;
+      this.listeners = {};
+      this.readyState = 0; // CONNECTING
+      this.send = vi.fn();
+      this.close = vi.fn();
+      this.onopen = null;
+      this.onmessage = null;
+      this.onerror = null;
+      this.onclose = null;
+      this.addEventListener = function (event: string, cb: any) {
+        this.listeners[event] = this.listeners[event] || [];
+        this.listeners[event].push(cb);
+      };
+      this.removeEventListener = function (event: string, cb: any) {
+        if (this.listeners[event]) {
+          this.listeners[event] = this.listeners[event].filter((fn: any) => fn !== cb);
+        }
+      };
+      this._fire = function (event: string, data?: any) {
+        // Simula propriedades do WebSocket para diferentes eventos
+        if (event === 'open') {
+          this.readyState = 1; // OPEN
+        } else if (event === 'close') {
+          this.readyState = 3; // CLOSED
+        } else if (event === 'error') {
+          this.readyState = 3; // CLOSED
+        }
+        
+        // Dispara através das propriedades onXXX
+        if (typeof this[`on${event}`] === 'function') {
+          this[`on${event}`](data);
+        }
+        // Dispara através de addEventListener
+        (this.listeners[event] || []).forEach((fn: any) => fn(data));
+      };
+    });
+    
+    // Define as constantes do WebSocket através da interface
+    (WebSocketMock as any).CONNECTING = 0;
+    (WebSocketMock as any).OPEN = 1;
+    (WebSocketMock as any).CLOSING = 2;
+    (WebSocketMock as any).CLOSED = 3;
+    
+    global.WebSocket = WebSocketMock as any;
   })
 
   afterEach(() => {
@@ -57,104 +90,113 @@ describe('useWebRepl', () => {
   })
 
   describe('Connection Management', () => {
-    it('should handle WebSocket open event', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
+    it('should handle WebSocket open event', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'));
+      
+      // Aguardar que o hook configure o WebSocket
+      await waitFor(() => {
+        expect(lastWebSocket).toBeDefined();
+        expect(lastWebSocket.onopen).toBeDefined();
+      });
+      
+      console.log('Lines antes do evento open:', result.current.lines);
+      console.log('Status antes do evento open:', result.current.status);
+      console.log('lastWebSocket.onopen existe:', typeof lastWebSocket.onopen);
+      
+      await act(async () => {
+        // Simular evento open através do handler onopen
+        lastWebSocket.readyState = 1; // OPEN
+        console.log('Chamando onopen...');
+        if (lastWebSocket.onopen) {
+          const event = { type: 'open', target: lastWebSocket };
+          lastWebSocket.onopen(event);
+        }
+      });
+      
+      console.log('Lines após evento open:', result.current.lines);
+      console.log('Status após evento open:', result.current.status);
+      console.log('Mensagem esperada:', SYSTEM_MESSAGES.CONNECTION.CONNECTED);
+      
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.CONNECTED);
+    });
 
-      act(() => {
-        mockWebSocket.onopen?.()
-      })
+    it('should handle WebSocket error event', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'));
+      await act(async () => {
+        lastWebSocket._fire('error', new Event('error'));
+        await new Promise(r => setTimeout(r, 20));
+      });
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.ERROR);
+        expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED);
+      });
+    });
 
-      expect(result.current.lines).toContain('[SYSTEM] Connection opened. Waiting for prompt...')
-    })
-
-    it('should handle WebSocket error event', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
-
-      act(() => {
-        mockWebSocket.onerror?.(new Event('error'))
-      })
-
-      expect(result.current.status).toBe(ReplStatus.ERROR)
-      expect(result.current.lines).toContain('[SYSTEM] A connection error occurred.')
-    })
-
-    it('should handle WebSocket close event', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
-
-      act(() => {
-        mockWebSocket.onclose?.()
-      })
-
-      expect(result.current.status).toBe(ReplStatus.DISCONNECTED)
-      expect(result.current.lines).toContain('[SYSTEM] Connection closed.')
-    })
+    it('should handle WebSocket close event', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'));
+      await act(async () => {
+        lastWebSocket._fire('close');
+        await new Promise(r => setTimeout(r, 20));
+      });
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.DISCONNECTED);
+        expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.DISCONNECTED);
+      });
+    });
 
     it('should handle invalid WebSocket URL', () => {
-      // Mock WebSocket constructor to throw
       global.WebSocket = vi.fn().mockImplementation(() => {
-        throw new DOMException('Invalid URL', 'SecurityError')
-      })
-
-      const { result } = renderHook(() => useWebRepl('invalid://url'))
-
-      expect(result.current.status).toBe(ReplStatus.ERROR)
-      expect(result.current.lines).toContain(
-        '[SYSTEM] Error: Connection blocked. Cannot connect to insecure ws:// from a secure https:// page. Use a wss:// URL if available.'
-      )
+        throw new DOMException('Invalid URL', 'SecurityError');
+      }) as any;
+      const { result } = renderHook(() => useWebRepl('invalid://url'));
+      expect(result.current.status).toBe(ReplStatus.ERROR);
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.ERROR.UNEXPECTED);
     })
   })
 
   describe('Authentication', () => {
-    it('should detect password prompt', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
+    it('should detect password prompt', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'));
+      await act(async () => {
+        lastWebSocket._fire('message', { data: 'Password:' });
+        await new Promise(r => setTimeout(r, 20));
+      });
+      expect(result.current.status).toBe(ReplStatus.PASSWORD);
+    });
 
-      act(() => {
-        mockWebSocket.onmessage?.({ data: 'Password:' })
-      })
+    it('should auto-authenticate with saved password', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266', 'mypassword'));
+      await act(async () => {
+        lastWebSocket._fire('message', { data: 'Password:' });
+        await new Promise(r => setTimeout(r, 20));
+      });
+      expect(lastWebSocket.send).toHaveBeenCalledWith('mypassword\r');
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.PASSWORD_SENT);
+    });
 
-      expect(result.current.status).toBe(ReplStatus.PASSWORD)
-    })
+    it('should detect successful connection', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'));
+      await act(async () => {
+        lastWebSocket._fire('message', { data: 'WebREPL connected' });
+        await new Promise(r => setTimeout(r, 20));
+      });
+      expect(result.current.status).toBe(ReplStatus.CONNECTED);
+    });
 
-    it('should auto-authenticate with saved password', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266', 'mypassword'))
-
-      act(() => {
-        mockWebSocket.onmessage?.({ data: 'Password:' })
-      })
-
-      expect(mockWebSocket.send).toHaveBeenCalledWith('mypassword\r')
-    })
-
-    it('should detect successful connection', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
-
-      act(() => {
-        mockWebSocket.onmessage?.({ data: 'WebREPL connected' })
-      })
-
-      expect(result.current.status).toBe(ReplStatus.CONNECTED)
-    })
-
-    it('should handle incorrect password', () => {
-      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266', 'wrongpassword'))
-
-      // First password attempt
-      act(() => {
-        mockWebSocket.onmessage?.({ data: 'Password:' })
-      })
-
-      // Password was incorrect, prompt again
-      act(() => {
-        mockWebSocket.onmessage?.({ data: 'Password:' })
-      })
-
-      expect(result.current.lines).toContain('[SYSTEM] Saved password was incorrect. Please enter manually.')
-    })
+    it('should handle incorrect password', async () => {
+      const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266', 'wrongpassword'));
+      await act(async () => {
+        lastWebSocket._fire('message', { data: 'Password:' });
+        lastWebSocket._fire('message', { data: 'Password:' });
+        await new Promise(r => setTimeout(r, 30));
+      });
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.INCORRECT_PASSWORD);
+    });
   })
 
   describe('Command Sending', () => {
     beforeEach(() => {
-      mockWebSocket.readyState = WebSocket.OPEN
+      lastWebSocket.readyState = 1 // OPEN
     })
 
     it('should send command with reset sequence', async () => {
@@ -166,8 +208,8 @@ describe('useWebRepl', () => {
         await new Promise(resolve => setTimeout(resolve, 100))
       })
 
-      expect(mockWebSocket.send).toHaveBeenCalledWith('\x03') // Ctrl+C
-      expect(mockWebSocket.send).toHaveBeenCalledWith('print("hello")\r')
+      expect(lastWebSocket.send).toHaveBeenCalledWith('\x03') // Ctrl+C
+      expect(lastWebSocket.send).toHaveBeenCalledWith('print("hello")\r')
     })
 
     it('should send empty command as carriage return', () => {
@@ -177,18 +219,18 @@ describe('useWebRepl', () => {
         result.current.sendCommand('')
       })
 
-      expect(mockWebSocket.send).toHaveBeenCalledWith('\r')
+      expect(lastWebSocket.send).toHaveBeenCalledWith('\r')
     })
 
     it('should handle sending data when not connected', () => {
-      mockWebSocket.readyState = WebSocket.CLOSED
+      lastWebSocket.readyState = 3 // CLOSED
       const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
 
       act(() => {
         result.current.sendData('test')
       })
 
-      expect(result.current.lines).toContain('[SYSTEM] Cannot send data, not connected.')
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED)
     })
 
     it('should clean control characters from commands', async () => {
@@ -199,41 +241,42 @@ describe('useWebRepl', () => {
         await new Promise(resolve => setTimeout(resolve, 100))
       })
 
-      expect(mockWebSocket.send).toHaveBeenCalledWith('testcommand\r')
+      expect(lastWebSocket.send).toHaveBeenCalledWith('testcommand\r')
     })
   })
 
   describe('Data Processing', () => {
-    it('should process incoming messages and update lines', () => {
+    it('should process incoming messages and update lines', async () => {
       const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
 
       act(() => {
-        mockWebSocket.onmessage?.({ data: 'Hello from MicroPython!' })
+        lastWebSocket.onmessage?.({ data: 'Hello from MicroPython!' })
       })
 
-      // Due to the timeout in message processing, we need to wait
-      setTimeout(() => {
+      await waitFor(() => {
         expect(result.current.lines).toContain('Hello from MicroPython!')
-      }, 100)
+      })
     })
 
-    it('should sanitize control characters from incoming data', () => {
+    it('should sanitize control characters from incoming data', async () => {
       const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
 
       act(() => {
-        mockWebSocket.onmessage?.({ data: 'Hello\x00\x08\x1FWorld' })
+        lastWebSocket.onmessage?.({ data: 'Hello\x00\x08\x1FWorld' })
       })
 
-      setTimeout(() => {
-        expect(result.current.lines).toContain('HelloWorld')
-      }, 100)
+      await waitFor(() => {
+        // Assuming the last line is the one being appended to
+        const lastLine = result.current.lines[result.current.lines.length - 1]
+        expect(lastLine).toContain('HelloWorld')
+      })
     })
 
     it('should handle logout detection', () => {
       const { result } = renderHook(() => useWebRepl('ws://192.168.4.1:8266'))
 
       act(() => {
-        mockWebSocket.onmessage?.({ data: 'logout' })
+        lastWebSocket.onmessage?.({ data: 'logout' })
       })
 
       expect(result.current.status).toBe(ReplStatus.DISCONNECTED)
@@ -258,15 +301,15 @@ describe('useWebRepl', () => {
 
       // Simulate connected state
       act(() => {
-        mockWebSocket.onmessage?.({ data: 'WebREPL connected' })
+        lastWebSocket.onmessage?.({ data: 'WebREPL connected' })
       })
 
       // Simulate unexpected close
       act(() => {
-        mockWebSocket.onclose?.()
+        lastWebSocket.onclose?.()
       })
 
-      expect(result.current.lines).toContain('[SYSTEM] Retry attempt 1/3 in 1s...')
+      expect(result.current.lines).toContain(SYSTEM_MESSAGES.CONNECTION.CONNECTION_LOST.replace('...', ' Tentativa 1/3 em 1s...'))
 
       vi.useRealTimers()
     })
@@ -283,8 +326,11 @@ describe('useWebRepl', () => {
 
   describe('URL Changes', () => {
     it('should reconnect when URL changes', () => {
-      const { result, rerender } = renderHook(
-        ({ url }) => useWebRepl(url),
+      const { rerender } = renderHook<
+        ReturnType<typeof useWebRepl>,
+        { url: string | null }
+      >(
+        (props) => useWebRepl(props.url),
         { initialProps: { url: 'ws://192.168.4.1:8266' } }
       )
 
@@ -297,8 +343,11 @@ describe('useWebRepl', () => {
     })
 
     it('should clear state when URL becomes null', () => {
-      const { result, rerender } = renderHook(
-        ({ url }) => useWebRepl(url),
+      const { result, rerender } = renderHook<
+        ReturnType<typeof useWebRepl>,
+        { url: string | null }
+      >(
+        (props) => useWebRepl(props.url),
         { initialProps: { url: 'ws://192.168.4.1:8266' } }
       )
 

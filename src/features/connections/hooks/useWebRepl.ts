@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ReplStatus } from '../types';
 import { useSimpleFileCommands } from '../../file-manager/hooks';
+import { SYSTEM_MESSAGES } from '../../../shared/constants/system.messages';
 
 /**
  * Hook customizado para gerenciar conexões WebREPL com MicroPython
@@ -61,7 +62,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
     if (ws.current?.readyState === WebSocket.OPEN) {
       ws.current.send(data);
     } else {
-      appendLine('[SYSTEM] Cannot send data, not connected.');
+      appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED);
     }
   }, [appendLine]);
 
@@ -106,7 +107,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const scheduleRetry = useCallback(() => {
     if (retryCount.current < maxRetries) {
       retryCount.current += 1;
-      appendLine(`[SYSTEM] Retry attempt ${retryCount.current}/${maxRetries} in ${retryDelay.current/1000}s...`);
+      appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTION_LOST.replace('...', ` Tentativa ${retryCount.current}/${maxRetries} em ${retryDelay.current/1000}s...`));
       
       setTimeout(() => {
         setReconnectAttempt(c => c + 1);
@@ -115,7 +116,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       // Exponential backoff: double the delay for next retry
       retryDelay.current = Math.min(retryDelay.current * 2, 10000); // Max 10 seconds
     } else {
-      appendLine('[SYSTEM] Max retry attempts reached. Use reconnect button to try again.');
+      appendLine(SYSTEM_MESSAGES.ERROR.OPERATION_FAILED);
       retryCount.current = 0;
       retryDelay.current = 1000;
     }
@@ -124,7 +125,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
   useEffect(() => {
     if (status === ReplStatus.PASSWORD && password && !passwordSent.current) {
-      appendLine('[SYSTEM] Saved password found. Attempting auto-login...');
+      appendLine(SYSTEM_MESSAGES.CONNECTION.PASSWORD_SENT);
       sendData(password + '\r');
       passwordSent.current = true;
     }
@@ -144,7 +145,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
 
     setLines([]);
     passwordSent.current = false; // Reset on new connection
-    appendLine(`[SYSTEM] Connecting to ${url}...`);
+    appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTING + url + '...');
     setStatus(ReplStatus.CONNECTING);
     
     let socket: WebSocket;
@@ -152,10 +153,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
       socket = new WebSocket(url);
     } catch (error) {
         console.error("WebSocket connection error:", error);
-        let errorMessage = '[SYSTEM] Error: Invalid WebSocket URL.';
+        let errorMessage = SYSTEM_MESSAGES.CONNECTION.INVALID_IP;
         // This handles the mixed-content security error
         if (error instanceof DOMException && error.name === 'SecurityError') {
-             errorMessage = '[SYSTEM] Error: Connection blocked. Cannot connect to insecure ws:// from a secure https:// page. Use a wss:// URL if available.';
+             errorMessage = SYSTEM_MESSAGES.ERROR.UNEXPECTED;
         }
         appendLine(errorMessage);
         setStatus(ReplStatus.ERROR);
@@ -165,8 +166,13 @@ export const useWebRepl = (url: string | null, password?: string) => {
     ws.current = socket;
 
     const onOpen = () => {
-      if (effectId.current !== currentEffectId) return; // Stale effect
-      appendLine('[SYSTEM] Connection opened. Waiting for prompt...');
+      console.log('WebSocket onOpen called, effectId check:', effectId.current, currentEffectId);
+      if (effectId.current !== currentEffectId) {
+        console.log('Stale effect detected, ignoring');
+        return; // Stale effect
+      }
+      console.log('Adding connection message to lines');
+      appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTED);
     };
 
     const onMessage = (event: MessageEvent) => {
@@ -200,7 +206,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
       setStatus(prevStatus => {
         if (data.includes('Password:')) {
             if (prevStatus === ReplStatus.PASSWORD && passwordSent.current) {
-                appendLine('[SYSTEM] Saved password was incorrect. Please enter manually.');
+                appendLine(SYSTEM_MESSAGES.CONNECTION.INCORRECT_PASSWORD);
                 passwordSent.current = false; // Allow manual entry to work
             }
             return ReplStatus.PASSWORD;
@@ -218,7 +224,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
     const onError = (error: Event) => {
       if (effectId.current !== currentEffectId) return; // Stale effect
       console.error('WebSocket Error:', error);
-      appendLine('[SYSTEM] A connection error occurred.');
+      appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED);
       setStatus(ReplStatus.ERROR);
       // Limpa fila de comandos quando há erro de conexão
       if (fileCommands.clearQueue) {
@@ -230,7 +236,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
         if (effectId.current !== currentEffectId) return; // Stale effect
         setStatus(prevStatus => {
             if (prevStatus !== ReplStatus.ERROR) {
-                appendLine('[SYSTEM] Connection closed.');
+                appendLine(SYSTEM_MESSAGES.CONNECTION.DISCONNECTED);
                 // Schedule automatic retry if it was an unexpected close
                 if (prevStatus === ReplStatus.CONNECTED || prevStatus === ReplStatus.CONNECTING) {
                   scheduleRetry();

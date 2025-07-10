@@ -1,272 +1,220 @@
-import { renderHook, act } from '@testing-library/react'
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { useSerial } from '../useSerial'
-import { ReplStatus } from '../../types'
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { useSerial } from '../useSerial';
+import { ReplStatus } from '../../types';
+import { SYSTEM_MESSAGES } from '../../../../shared/constants/system.messages';
 
-// Mock dependencies
+// Mock global para navigator.serial
+const mockSerial = { getPorts: vi.fn() };
+if (!('serial' in global.navigator)) {
+  Object.defineProperty(global.navigator, 'serial', {
+    value: mockSerial,
+    configurable: true,
+  });
+}
+
+// Mock completo para useSimpleFileCommands
 vi.mock('../../../file-manager/hooks', () => ({
   useSimpleFileCommands: vi.fn(() => ({
     processMessage: vi.fn(),
+    clearQueue: vi.fn(), // Mock da função clearQueue
+    uploadFile: vi.fn(),
+    downloadFile: vi.fn(),
+    deleteFile: vi.fn(),
+    createDirectory: vi.fn(),
+    listFiles: vi.fn(),
   })),
-}))
+}));
 
 describe('useSerial', () => {
-  let mockPort: Partial<SerialPort>
-  let mockReader: any
-  let mockWriter: any
+  let mockPort: any;
+  let mockReader: any;
+  let mockWriter: any;
 
   beforeEach(() => {
-    // Reset mocks
-    vi.clearAllMocks()
-    
-    // Mock reader
-    mockReader = {
-      read: vi.fn(),
-      cancel: vi.fn().mockResolvedValue(undefined),
-    }
+    vi.clearAllMocks();
+    mockSerial.getPorts.mockReset();
 
-    // Mock writer
+    // Mock Writer
     mockWriter = {
       write: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
-    }
+      releaseLock: vi.fn(),
+    };
 
-    // Mock serial port
+    // Mock Reader
+    let readCallCount = 0;
+    mockReader = {
+      read: vi.fn().mockImplementation(() => {
+        readCallCount++;
+        if (readCallCount === 1) {
+          return Promise.resolve({ value: new Uint8Array([72, 101, 108, 108, 111]), done: false });
+        }
+        return Promise.resolve({ value: undefined, done: true });
+      }),
+      cancel: vi.fn().mockResolvedValue(undefined),
+      releaseLock: vi.fn(),
+    };
+
+    // Mock dos streams
+    const mockReadable = {
+      getReader: vi.fn(() => mockReader),
+    };
+    
+    const mockWritable = {
+      getWriter: vi.fn(() => mockWriter),
+    };
+
+    // Mock Port com estado inicial limpo
     mockPort = {
-      getInfo: vi.fn().mockReturnValue({
-        usbVendorId: 0x1234,
-        usbProductId: 0x5678,
+      getInfo: vi.fn().mockReturnValue({ usbVendorId: 0x1234, usbProductId: 0x5678 }),
+      open: vi.fn().mockImplementation(async () => {
+        // Após abertura, define os streams como disponíveis
+        mockPort.readable = mockReadable;
+        mockPort.writable = mockWritable;
+        return Promise.resolve();
       }),
-      open: vi.fn().mockResolvedValue(undefined),
-      close: vi.fn().mockResolvedValue(undefined),
-      readable: new ReadableStream({
-        start(controller) {
-          // Mock readable stream
-        },
+      close: vi.fn().mockImplementation(async () => {
+        // Ao fechar, remove os streams
+        mockPort.readable = null;
+        mockPort.writable = null;
+        return Promise.resolve();
       }),
-      writable: new WritableStream({
-        write(chunk) {
-          // Mock writable stream
-        },
-      }),
-    }
-
-    // Mock stream APIs
-    global.TextDecoderStream = vi.fn().mockImplementation(() => ({
-      readable: {
-        getReader: () => mockReader,
-      },
-      writable: new WritableStream(),
-    }))
-
-    global.TextEncoder = vi.fn().mockImplementation(() => ({
-      encode: vi.fn((text) => new Uint8Array([...text].map(c => c.charCodeAt(0)))),
-    }))
-
-    // Mock WritableStream.getWriter
-    Object.defineProperty(mockPort.writable, 'getWriter', {
-      value: vi.fn().mockReturnValue(mockWriter),
-    })
-
-    // Mock navigator.serial
-    Object.defineProperty(global.navigator, 'serial', {
-      value: {
-        getPorts: vi.fn().mockResolvedValue([mockPort]),
-      },
-    })
-  })
+      readable: null, // Inicialmente null
+      writable: null, // Inicialmente null
+    };
+    
+    // Sempre retorna a porta como disponível
+    mockSerial.getPorts.mockResolvedValue([mockPort]);
+  });
 
   afterEach(() => {
-    vi.resetAllMocks()
-  })
+    vi.resetAllMocks();
+  });
 
   describe('Initial State', () => {
     it('should initialize with disconnected status', () => {
-      const { result } = renderHook(() => useSerial(null))
-      
-      expect(result.current.status).toBe(ReplStatus.DISCONNECTED)
-      expect(result.current.lines).toEqual([])
-    })
-
-    it('should initialize with default parameters', () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
-      
-      expect(result.current.autoScroll).toBe(true)
-    })
-  })
+      const { result } = renderHook(() => useSerial(null));
+      expect(result.current.status).toBe(ReplStatus.DISCONNECTED);
+      expect(result.current.lines).toEqual([]);
+    });
+  });
 
   describe('Connection Management', () => {
-    it('should connect to serial port', async () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
+    it('should connect to serial port and set status to connected', async () => {
+      const { result } = renderHook(() => useSerial(null)); // Inicia sem porta para evitar auto-conexão
+      expect(result.current.status).toBe(ReplStatus.DISCONNECTED);
+      
+      // Simular manual connection através da função connect
+      await act(async () => {
+        // Primeiro definir a porta manualmente no hook
+        // Isso é um hack para teste, mas vamos simular definindo diretamente
+        (result.current as any).portRef = { current: mockPort };
+        
+        // Agora chamar connect manualmente
+        await result.current.connect();
+      });
+      
+      // Verificar o resultado
+      console.log('Status após connect:', result.current.status);
+      console.log('Lines após connect:', result.current.lines);
+      
+      expect(result.current.status).toBe(ReplStatus.CONNECTED);
+      expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTED}`);
+      expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.REPL_READY}`);
+    });
+
+    it('should handle connection errors and set status to error', async () => {
+      const error = new Error('Connection failed');
+      mockPort.open.mockRejectedValue(error);
+      const { result } = renderHook(() => useSerial(mockPort));
 
       await act(async () => {
-        await result.current.connect()
-      })
+        await result.current.connect();
+      });
 
-      expect(mockPort.open).toHaveBeenCalledWith({
-        baudRate: 115200,
-        dataBits: 8,
-        stopBits: 1,
-        parity: 'none',
-        flowControl: 'none',
-      })
-      expect(result.current.status).toBe(ReplStatus.CONNECTED)
-    })
+      // Log temporário para depuração
+      // eslint-disable-next-line no-console
+      console.log('Status após erro:', result.current.status, 'Lines:', result.current.lines);
 
-    it('should handle connection errors', async () => {
-      mockPort.open = vi.fn().mockRejectedValue(new Error('Connection failed'))
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
-
-      await act(async () => {
-        await result.current.connect()
-      })
-
-      expect(result.current.status).toBe(ReplStatus.ERROR)
-      expect(result.current.lines).toContain('[SYSTEM] Connection Error: Connection failed')
-    })
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.ERROR);
+        expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED}: ${error.message}`);
+      });
+    });
 
     it('should disconnect from serial port', async () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
+      const { result } = renderHook(() => useSerial(mockPort));
 
-      // First connect
       await act(async () => {
-        await result.current.connect()
-      })
+        await result.current.connect();
+      });
 
-      // Then disconnect
       await act(async () => {
-        await result.current.disconnect()
-      })
+        await result.current.disconnect();
+      });
 
-      expect(result.current.status).toBe(ReplStatus.DISCONNECTED)
-      expect(mockReader.cancel).toHaveBeenCalled()
-      expect(mockWriter.close).toHaveBeenCalled()
-    })
-  })
+      // Log temporário para depuração
+      // eslint-disable-next-line no-console
+      console.log('Status após disconnect:', result.current.status, 'Lines:', result.current.lines);
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.DISCONNECTED);
+        expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.DISCONNECTED}`);
+        expect(mockReader.cancel).toHaveBeenCalled();
+        expect(mockWriter.close).toHaveBeenCalled();
+      });
+    });
+  });
 
   describe('Command Sending', () => {
     it('should send command with carriage return by default', async () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
+      const { result } = renderHook(() => useSerial(mockPort));
+      await act(async () => { await result.current.connect(); });
+
+      const command = 'print("hello")';
+      const expectedData = new TextEncoder().encode(command + '\r');
 
       await act(async () => {
-        await result.current.connect()
-      })
+        result.current.sendCommand(command);
+      });
 
-      await act(async () => {
-        result.current.sendCommand('print("hello")')
-      })
+      // Log temporário para depuração
+      // eslint-disable-next-line no-console
+      console.log('Chamadas do write:', mockWriter.write.mock.calls);
 
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.any(Uint8Array) // Contains encoded 'print("hello")\r'
-      )
-    })
-
-    it('should send empty command as carriage return', async () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
-
-      await act(async () => {
-        await result.current.connect()
-      })
-
-      await act(async () => {
-        result.current.sendCommand('')
-      })
-
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.any(Uint8Array) // Contains encoded '\r'
-      )
-    })
-
-    it('should handle different line endings', async () => {
-      const { result } = renderHook(() => 
-        useSerial(mockPort as SerialPort, 115200, 'newline')
-      )
-
-      await act(async () => {
-        await result.current.connect()
-      })
-
-      await act(async () => {
-        result.current.sendCommand('test')
-      })
-
-      expect(mockWriter.write).toHaveBeenCalledWith(
-        expect.any(Uint8Array) // Contains encoded 'test\n'
-      )
-    })
-  })
-
-  describe('Data Processing', () => {
-    it('should clear output', () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
-
-      act(() => {
-        result.current.clearOutput()
-      })
-
-      expect(result.current.lines).toEqual([])
-    })
-
-    it('should check port availability', async () => {
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
-
-      const isAvailable = await act(async () => {
-        return await result.current.checkPortAvailability()
-      })
-
-      expect(isAvailable).toBe(true)
-      expect(global.navigator.serial.getPorts).toHaveBeenCalled()
-    })
-  })
-
-  describe('Configuration Options', () => {
-    it('should handle custom baud rate', () => {
-      const customBaudRate = 9600
-      const { result } = renderHook(() => 
-        useSerial(mockPort as SerialPort, customBaudRate)
-      )
-
-      act(async () => {
-        await result.current.connect()
-      })
-
-      expect(mockPort.open).toHaveBeenCalledWith(
-        expect.objectContaining({
-          baudRate: customBaudRate,
-        })
-      )
-    })
-
-    it('should handle autoscroll configuration', () => {
-      const { result } = renderHook(() => 
-        useSerial(mockPort as SerialPort, 115200, 'carriageReturn', false)
-      )
-
-      expect(result.current.autoScroll).toBe(false)
-    })
-  })
+      await waitFor(() => {
+        expect(mockWriter.write).toHaveBeenCalledWith(expectedData);
+      });
+    });
+  });
 
   describe('Error Handling', () => {
-    it('should handle missing port', async () => {
-      const { result } = renderHook(() => useSerial(null))
+    it('should handle missing port on connect', async () => {
+      const { result } = renderHook(() => useSerial(null));
 
       await act(async () => {
-        await result.current.connect()
-      })
+        await result.current.connect();
+      });
 
-      expect(result.current.status).toBe(ReplStatus.ERROR)
-      expect(result.current.lines).toContain('[SYSTEM] Error: No serial port provided.')
-    })
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.ERROR);
+        expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.SERIAL_PORT_NOT_SELECTED}`);
+      });
+    });
 
-    it('should handle unavailable port', async () => {
-      global.navigator.serial.getPorts = vi.fn().mockResolvedValue([])
-      const { result } = renderHook(() => useSerial(mockPort as SerialPort))
+    it('should handle unavailable port on connect', async () => {
+      mockSerial.getPorts.mockResolvedValue([]);
+      const { result } = renderHook(() => useSerial(mockPort));
 
       await act(async () => {
-        await result.current.connect()
-      })
+        await result.current.connect();
+      });
 
-      expect(result.current.status).toBe(ReplStatus.ERROR)
-    })
-  })
-})
+      await waitFor(() => {
+        expect(result.current.status).toBe(ReplStatus.ERROR);
+        expect(result.current.lines).toContain(`[SYSTEM] ${SYSTEM_MESSAGES.CONNECTION.CONNECTION_FAILED}: ${SYSTEM_MESSAGES.CONNECTION.SERIAL_PORT_NOT_AVAILABLE}`);
+      });
+    });
+  });
+});

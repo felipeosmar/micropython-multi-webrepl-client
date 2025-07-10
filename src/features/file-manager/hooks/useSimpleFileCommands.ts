@@ -237,13 +237,30 @@ export const useSimpleFileCommands = (
       });
 
       try {
-        // Cria um comando mais robusto que garante separação adequada
-        // Usa import time e sleep para dar tempo do comando ser exibido completamente
-        const wrappedCommand = `import time; print("__START_${commandId}__"); time.sleep(0.1); ${command}; time.sleep(0.1); print("__END_${commandId}__")`;
-
-        // Envia comando normalmente pelo terminal
-        console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
-        sendCommand(wrappedCommand);
+        // Se o comando já usa exec(), precisamos de uma abordagem diferente
+        if (command.includes('exec(')) {
+          // Extrai o conteúdo do exec e adiciona os marcadores dentro dele
+          const execContent = command.match(/exec\("(.*)"\)/);
+          if (execContent && execContent[1]) {
+            // Adiciona os marcadores dentro do exec existente
+            const innerCode = execContent[1].replace(/\\n/g, '\n');
+            const wrappedInner = `import time\nprint("__START_${commandId}__")\ntime.sleep(0.1)\n${innerCode}\ntime.sleep(0.1)\nprint("__END_${commandId}__")`;
+            const wrappedCommand = `exec("""${wrappedInner}""")`;
+            
+            console.log(`[FILE CMD] Sending wrapped exec command for ${commandId}`);
+            sendCommand(wrappedCommand);
+          } else {
+            // Fallback se não conseguir parsear
+            const wrappedCommand = `print("__START_${commandId}__"); ${command}; print("__END_${commandId}__")`;
+            console.log(`[FILE CMD] Sending simple wrapped command for ${commandId}`);
+            sendCommand(wrappedCommand);
+          }
+        } else {
+          // Comando simples, pode usar concatenação direta
+          const wrappedCommand = `import time; print("__START_${commandId}__"); time.sleep(0.1); ${command}; time.sleep(0.1); print("__END_${commandId}__")`;
+          console.log(`[FILE CMD] Sending wrapped command for ${commandId}`);
+          sendCommand(wrappedCommand);
+        }
       } catch (error) {
         // Se falhar ao enviar comando, remove da fila e rejeita
         const index = commandQueueRef.current.findIndex(cmd => cmd.commandId === commandId);

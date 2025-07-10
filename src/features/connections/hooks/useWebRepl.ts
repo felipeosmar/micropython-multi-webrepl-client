@@ -26,6 +26,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const retryDelay = useRef(1000); // Start with 1 second
+  const isAutoRetrying = useRef(false); // Flag para controlar se está em retry automático
   
   // Buffer para acumular mensagens de arquivo - DEVE ser declarado no início
   const allMessages = useRef<string>('');
@@ -103,6 +104,7 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const reconnect = useCallback(() => {
     retryCount.current = 0; // Reset retry count on manual reconnect
     retryDelay.current = 1000; // Reset delay
+    isAutoRetrying.current = false; // Reset auto retry flag
     setReconnectAttempt(c => c + 1);
   }, []);
 
@@ -110,7 +112,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
    * Tentativa automática de reconexão com exponential backoff
    */
   const scheduleRetry = useCallback(() => {
-    if (retryCount.current < maxRetries) {
+    // Só agenda retry se não estiver já em processo e não tiver excedido tentativas
+    if (!isAutoRetrying.current && retryCount.current < maxRetries) {
+      isAutoRetrying.current = true;
       retryCount.current += 1;
       appendLine(SYSTEM_MESSAGES.CONNECTION.CONNECTION_LOST.replace('...', ` Tentativa ${retryCount.current}/${maxRetries} em ${retryDelay.current/1000}s...`));
       
@@ -120,10 +124,13 @@ export const useWebRepl = (url: string | null, password?: string) => {
       
       // Exponential backoff: double the delay for next retry
       retryDelay.current = Math.min(retryDelay.current * 2, 10000); // Max 10 seconds
-    } else {
+    } else if (retryCount.current >= maxRetries && isAutoRetrying.current) {
+      // Atingiu o máximo de tentativas
       appendLine(SYSTEM_MESSAGES.ERROR.OPERATION_FAILED);
+      appendLine('Reconexão automática falhou. Use o botão para tentar novamente.');
       retryCount.current = 0;
       retryDelay.current = 1000;
+      isAutoRetrying.current = false; // Para o retry automático
     }
   }, [appendLine]);
 
@@ -241,6 +248,10 @@ export const useWebRepl = (url: string | null, password?: string) => {
             return ReplStatus.PASSWORD;
         }
         if (data.includes('WebREPL connected')) {
+            // Conexão bem sucedida, reseta flags de retry
+            retryCount.current = 0;
+            retryDelay.current = 1000;
+            isAutoRetrying.current = false;
             return ReplStatus.CONNECTED;
         }
         if (data.includes('logout')) {
@@ -267,7 +278,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
             if (prevStatus !== ReplStatus.ERROR) {
                 appendLine(SYSTEM_MESSAGES.CONNECTION.DISCONNECTED);
                 // Schedule automatic retry if it was an unexpected close
-                if (prevStatus === ReplStatus.CONNECTED || prevStatus === ReplStatus.CONNECTING) {
+                // Mas só se ainda não estiver em retry e não tiver excedido tentativas
+                if ((prevStatus === ReplStatus.CONNECTED || prevStatus === ReplStatus.CONNECTING) && 
+                    !isAutoRetrying.current) {
                   scheduleRetry();
                 }
             }

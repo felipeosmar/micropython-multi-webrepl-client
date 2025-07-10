@@ -66,14 +66,12 @@ export const useSimpleFileCommands = (
     
     console.log(`[FILE CMD] Processing message for ${currentCommand.commandId}, has start: ${fullMessage.includes(startMarker)}, has end: ${fullMessage.includes(endMarker)}`);
 
-    // Atualiza buffer apenas uma vez quando há os dois marcadores
-    if (fullMessage.includes(startMarker) && fullMessage.includes(endMarker) && !currentCommand.buffer.includes(endMarker)) {
-      currentCommand.buffer = fullMessage;
-      console.log(`[FILE CMD] Updated buffer for ${currentCommand.commandId}`);
-    }
+    // Atualiza buffer com a mensagem completa
+    currentCommand.buffer = fullMessage;
+    console.log(`[FILE CMD] Updated buffer for ${currentCommand.commandId}`);
 
     // Procura pelo marcador de fim do comando
-    if (currentCommand.buffer.includes(endMarker)) {
+    if (fullMessage.includes(startMarker) && fullMessage.includes(endMarker)) {
       const command = commandQueueRef.current.shift();
       if (command) {
         clearTimeout(command.timeout);

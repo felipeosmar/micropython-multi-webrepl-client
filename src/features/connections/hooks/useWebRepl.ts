@@ -26,6 +26,9 @@ export const useWebRepl = (url: string | null, password?: string) => {
   const retryCount = useRef(0);
   const maxRetries = 3;
   const retryDelay = useRef(1000); // Start with 1 second
+  
+  // Buffer para acumular mensagens de arquivo - DEVE ser declarado no início
+  const allMessages = useRef<string>('');
 
 
   /**
@@ -189,18 +192,33 @@ export const useWebRepl = (url: string | null, password?: string) => {
         return;
       }
       
-      // Verifica se contém marcadores de comando de arquivo
+      // Verifica se contém marcadores de comando de arquivo ou comandos de listagem
       if (data.includes('__START_') || data.includes('__END_') ||
           data.includes('exec("import os') ||
           data.includes('exec("import uos') ||
-          data.includes('exec("with open(')) {
+          data.includes('exec("with open(') ||
+          allMessages.current.includes('__START_') && allMessages.current.includes('__END_')) {
         // Processa comandos de arquivo com buffer acumulado
         fileCommands.processMessage(allMessages.current);
+        
+        // Limpa o buffer se o comando foi completado
+        if (allMessages.current.includes('__END_')) {
+          const endMarkerMatch = allMessages.current.match(/__END_(\w+)__/);
+          if (endMarkerMatch) {
+            const commandId = endMarkerMatch[1];
+            if (allMessages.current.includes(`__START_${commandId}__`)) {
+              // Comando completo processado, limpa o buffer
+              allMessages.current = '';
+            }
+          }
+        }
         return;
       }
       
-      // Dados normais do terminal
-      appendLine(data);
+      // Dados normais do terminal - não exibe comandos de arquivo
+      if (!data.includes('print("__START_') && !data.includes('exec("import')) {
+        appendLine(data);
+      }
       
       // Detecta estado da conexão
       setStatus(prevStatus => {
@@ -293,9 +311,6 @@ export const useWebRepl = (url: string | null, password?: string) => {
   // Integração com comandos de arquivo
   const isConnected = status === ReplStatus.CONNECTED;
   const fileCommands = useSimpleFileCommands(sendFileCommand, isConnected);
-  
-  // Buffer para acumular mensagens de arquivo
-  const allMessages = useRef<string>('');
 
   return { 
     status, 
